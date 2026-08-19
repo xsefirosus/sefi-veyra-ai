@@ -1,0 +1,19 @@
+# Obsidian Bases view: topic -> note count over memory/daily. Additive to ripgrep; the
+# knowledge-manager uses it as a one-glance promotion-candidate list. Requires Obsidian
+# Bases.
+# Bases cannot natively count "3+ notes linking to the same target"; it groups by the
+# shared topic field instead.
+filters:
+  and:
+    - file.inFolder("memory/daily")
+properties:
+  topic:
+    displayName: Topic
+views:
+  - type: table
+    name: Promotion candidates
+    groupBy: topic
+    summaries:
+      topic: Unique
+    order:
+      - topic
