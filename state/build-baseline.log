@@ -1,0 +1,20 @@
+﻿transforming...
+[32mâœ“[39m 2 modules transformed.
+rendering chunks...
+[2mout/main/[22m[36mindex.js  [39m[1m[2m1.48 kB[22m[1m[22m
+[32mâœ“ built in 225ms[39m
+[36mvite v7.3.6 [32mbuilding ssr environment for production...[36m[39m
+transforming...
+[32mâœ“[39m 1 modules transformed.
+rendering chunks...
+[2mout/preload/[22m[36mindex.js  [39m[1m[2m0.42 kB[22m[1m[22m
+[32mâœ“ built in 24ms[39m
+[36mvite v7.3.6 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32mâœ“[39m 30 modules transformed.
+rendering chunks...
+[2m../../out/renderer/[22m[32mindex.html                    [39m[1m[2m  0.55 kB[22m[1m[22m
+[2m../../out/renderer/[22m[32massets/electron-DtwWEc_u.svg  [39m[1m[2m  5.82 kB[22m[1m[22m
+[2m../../out/renderer/[22m[35massets/index-B4axxrkd.css     [39m[1m[2m  6.75 kB[22m[1m[22m
+[2m../../out/renderer/[22m[36massets/index-C_leiWSl.js      [39m[1m[33m556.85 kB[39m[22m
+[32mâœ“ built in 1.28s[39m
