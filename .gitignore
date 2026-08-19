@@ -1,0 +1,3 @@
+# sefi-agents worktree isolation: every loop worktree lives under .worktrees/
+# .worktrees/logs/ is always ignored (init.md step 6); state/ and inbox/ are committed by default.
+.worktrees/
