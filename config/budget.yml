@@ -1,0 +1,7 @@
+per_run_usd_cap: 0.50
+daily_usd_cap: 2.00
+per_dispatch_usd_cap: 0.15   # one subagent dispatch; catches a runaway dispatch long before the daily cap notices (a predecessor system: one self-batching dispatch hit 1.36M tokens)
+max_retries: 2   # total REJECT cycles allowed on the same slice before escalating to inbox/
+                 # (max_retries: 2 = escalate after the 2nd REJECT, not the 3rd)
+max_parallel_worktrees: 3
+per_agent_return_tokens: 150

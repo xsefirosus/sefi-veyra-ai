@@ -1,0 +1,9 @@
+improvement:
+  enabled: false       # shared install (init.md step 7): this ~/.config/opencode install serves more than one project, so the retro loop writes state/retro-<date>.md and a human applies it
+memory:
+  vault_dir: memory
+  inject_char_cap: 1500
+  prune_trace_after_days: 30
+terse_mode:
+  enabled: true        # on by user preference; costs ~1-1.5k tokens/turn to load, nets
+                       # negative on short replies -- see skills/terse-mode/SKILL.md
