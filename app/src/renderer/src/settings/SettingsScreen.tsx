@@ -7,6 +7,7 @@ import {
   settingsReducer,
   type SttModel
 } from './settings-reducer'
+import { LOOPBACK_DEVICE_ID } from '../capture/loopback-capture'
 
 const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
 
@@ -28,6 +29,10 @@ function SettingsScreen(): React.JSX.Element {
 
   // Audio device list feeds the device <select> (plan step 17 feeds this same
   // list from the capture path; enumerateDevices is the zero-dependency source).
+  // Step 19 appends the virtual loopback track: "System audio (loopback)" is
+  // NOT an audioinput device -- it is the plan's dual-track second capture.
+  // The sentinel (LOOPBACK_DEVICE_ID) must never reach getUserMedia; the mic
+  // path is its only consumer and treats it as absent.
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
@@ -38,7 +43,11 @@ function SettingsScreen(): React.JSX.Element {
         const inputs = found
           .filter((d) => d.kind === 'audioinput')
           .map((d) => ({ deviceId: d.deviceId, label: d.label || d.deviceId }))
-        if (inputs.length > 0) setDevices([{ deviceId: null, label: 'System default' }, ...inputs])
+        setDevices([
+          { deviceId: null, label: 'System default' },
+          ...inputs,
+          { deviceId: LOOPBACK_DEVICE_ID, label: 'System audio (loopback)' }
+        ])
       } catch {
         // Enumeration can throw (permission/policy); the default entry still works.
       }

@@ -7,6 +7,10 @@ export interface Api {
   saveSettings: (settings: Settings) => Promise<Settings>
   /** Step 17: send one 16 kHz Float32Array PCM chunk to the main-process 'pcm' handler. */
   sendPcm: (chunk: Float32Array) => void
+  /** Step 19: send one 16 kHz Float32Array PCM chunk to the main-process 'pcm-loopback' handler (loopback track -> second adapter session). */
+  sendLoopbackPcm: (chunk: Float32Array) => void
+  /** Step 19: true when VEYRA_LOOPBACK_CHECK=1 (scripts/check-loopback.ps1) — auto-start loopback capture for the energy check. */
+  loopbackCheckMode: boolean
   /** Step 18: subscribe to main-process transcript events; returns the unsubscribe fn. */
   onTranscriptEvent: (cb: (event: TranscriptEvent) => void) => () => void
   /** Step 18: 'overlay' for the overlay window, 'main' otherwise. */

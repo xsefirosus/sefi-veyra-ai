@@ -13,6 +13,15 @@ const api = {
   // Step 17: mic capture ships 16 kHz Float32Array chunks to main over the
   // 'pcm' channel; main validates + converts to int16 and calls adapter.send.
   sendPcm: (chunk: Float32Array): void => ipcRenderer.send('pcm', chunk),
+  // Step 19: loopback capture ships 16 kHz Float32Array chunks over the
+  // 'pcm-loopback' channel -> main's SECOND adapter session (dual-track,
+  // source 'loopback'). Same payload contract as sendPcm.
+  sendLoopbackPcm: (chunk: Float32Array): void => ipcRenderer.send('pcm-loopback', chunk),
+  // Step 19: true under scripts/check-loopback.ps1 (VEYRA_LOOPBACK_CHECK=1) --
+  // the renderer auto-starts loopback capture and main writes the energy
+  // verdict to state/loopback-check.json, then quits. Read here (preload, with
+  // Node env access) so the renderer bundle never sees the env var.
+  loopbackCheckMode: process.env['VEYRA_LOOPBACK_CHECK'] === '1',
   // Step 18: transcript events broadcast by main to BOTH windows; returns an
   // unsubscribe fn for React effect cleanup.
   onTranscriptEvent: (cb: (event: TranscriptEvent) => void): (() => void) =>

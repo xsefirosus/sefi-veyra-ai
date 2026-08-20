@@ -178,3 +178,45 @@ describe('createSttAdapter(local-whisperlivekit) factory (step-9 branch fill)', 
     return expect(adapter.close()).resolves.toBeUndefined()
   })
 })
+
+describe('dual-track (plan step 19): two adapter instances = two independent wlk sessions', () => {
+  it('each instance owns its callbacks, seq counter, transport, and close (no cross-talk)', async () => {
+    const fakeA = new FakeWsTransport(fixture)
+    const fakeB = new FakeWsTransport(fixture)
+    const adapterA = new WhisperLiveKitSttAdapter({ transport: fakeA })
+    const adapterB = new WhisperLiveKitSttAdapter({ transport: fakeB })
+    const eventsA: Array<{ kind: 'partial' | 'final'; text: string; seq: number }> = []
+    const eventsB: Array<{ kind: 'partial' | 'final'; text: string; seq: number }> = []
+    adapterA.onPartial((text, seq) => eventsA.push({ kind: 'partial', text, seq }))
+    adapterA.onFinal((text, seq) => eventsA.push({ kind: 'final', text, seq }))
+    adapterB.onPartial((text, seq) => eventsB.push({ kind: 'partial', text, seq }))
+    adapterB.onFinal((text, seq) => eventsB.push({ kind: 'final', text, seq }))
+
+    await Promise.all([adapterA.connect(), adapterB.connect()])
+
+    // Same fixture replayed into two instances -> two independent, identical
+    // streams; the mic track and the loopback track cannot share state.
+    expect(eventsA).toEqual(eventsB)
+    expect(eventsA).toHaveLength(4)
+    // seq counters advanced independently and identically (fixture-driven).
+    expect(eventsA[3].seq).toBe(1)
+    expect(eventsB[3].seq).toBe(1)
+
+    // Independent send paths: interleaved sends land on their own transport.
+    adapterA.send(new Int16Array([1]))
+    adapterB.send(new Int16Array([2]))
+    expect(fakeA.sent).toHaveLength(1)
+    expect(fakeB.sent).toHaveLength(1)
+
+    // close() closes only its own transport.
+    await adapterA.close()
+    expect(fakeA.closed).toBe(true)
+    expect(fakeB.closed).toBe(false)
+  })
+
+  it('the factory returns a NEW instance per call (two sessions, not a singleton)', () => {
+    const mic = createSttAdapter('local-whisperlivekit')
+    const loopback = createSttAdapter('local-whisperlivekit')
+    expect(mic).not.toBe(loopback)
+  })
+})

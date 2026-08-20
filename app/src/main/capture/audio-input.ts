@@ -117,8 +117,12 @@ export async function feedWavToAdapter(
   return { samples: pcm.length, chunks }
 }
 
-/** Shape-validate an IPC PCM chunk; returns a finite Float32Array or throws. */
-function toFiniteFloat32(chunk: unknown): Float32Array {
+/**
+ * Shape-validate an IPC PCM chunk; returns a finite Float32Array or throws.
+ * Exported (step 19) so the VEYRA_LOOPBACK_CHECK accumulator validates through
+ * the SAME trust-boundary code as the mic sink instead of a second copy.
+ */
+export function toFiniteFloat32(chunk: unknown): Float32Array {
   let f32: Float32Array
   if (chunk instanceof Float32Array) {
     f32 = chunk
