@@ -1,0 +1,6 @@
+{
+  "firstPartialMs": 1552,
+  "model": "tiny",
+  "criterion": "sub-2s spoken-to-partial",
+  "pass": true
+}

@@ -34,6 +34,21 @@
  * ## Local-by-default
  * `--host 127.0.0.1` is always passed so wlk binds loopback only (never
  * 0.0.0.0), keeping the plan's Done Criteria "only ws://127.0.0.1" rule.
+ *
+ * ## Spawn-site fixes applied in start() -- flagged by the step-14 probe
+ * probe-wlk.mjs's header says "NOTE for step 21 (e2e harness): WlkServer
+ * (step 13) spawns wlk WITHOUT this env and will hit the same cublas error;
+ * the fix belongs at the spawn site." Two fixes therefore live in start(),
+ * NOT in buildWlkCommand (whose exact argv is a tested step-13 contract):
+ *  1. `--pcm-input` is appended to the spawned argv. The step-16 adapter
+ *     streams RAW s16le PCM (probe framing); without --pcm-input wlk routes
+ *     client bytes through ffmpeg (audio_processor.py:118-122) and raw PCM
+ *     is mangled. The probe appended the same flag (parse_args.py:260-263).
+ *  2. `CUDA_VISIBLE_DEVICES=-1` is set in the child env unless already set.
+ *     On this machine faster-whisper's device='auto' picks CUDA (driver
+ *     present) but the venv lacks cublas64_12.dll -> startup crash
+ *     (verified 2026-08-20, probe header). -1 forces CPU, the plan's v1
+ *     mode; an explicit env override is respected.
  */
 
 import { spawn, type ChildProcess } from 'child_process'
@@ -150,8 +165,20 @@ export class WlkServer {
       throw new Error('wlk-server: global WebSocket unavailable (needs Node >= 22)')
     }
     const { cmd, args } = buildWlkCommand(this.model, this.wlkBin)
+    // Raw-PCM framing (see header: the step-16 adapter streams s16le PCM;
+    // without --pcm-input wlk routes bytes through ffmpeg). buildWlkCommand's
+    // tested contract is untouched -- this is a spawn-site fix, per the
+    // step-14 probe note.
+    args.push('--pcm-input')
     this.logTail = []
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    const child = spawn(cmd, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      // CPU-only (see header): faster-whisper device=auto picks CUDA on this
+      // machine but the venv lacks cublas64_12.dll; -1 forces CPU. Respect an
+      // explicit CUDA_VISIBLE_DEVICES override if the caller set one.
+      env: { ...process.env, CUDA_VISIBLE_DEVICES: process.env.CUDA_VISIBLE_DEVICES ?? '-1' }
+    })
     this.child = child
     child.stdout?.on('data', (d: Buffer) => this.rememberLog(d))
     child.stderr?.on('data', (d: Buffer) => this.rememberLog(d))
