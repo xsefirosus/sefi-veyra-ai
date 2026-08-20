@@ -1,9 +1,11 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, createOverlayWindow } from './windows'
 import { registerIpcHandlers } from './settings-store'
+import { createPcmSink, feedWavToAdapter } from './capture/audio-input'
+import { createSttAdapter } from '../shared/stt/stt-adapter'
 
 /**
  * Smoke mode (env VEYRA_SMOKE=1): once both windows are ready, wait 1500ms,
@@ -51,6 +53,42 @@ function launchWindows(): void {
   if (process.env['VEYRA_SMOKE'] === '1') armSmoke(mainWindow, overlay)
 }
 
+/**
+ * Step 17 capture bridge. Two jobs, both routed through the SAME adapter.send
+ * path (the step-16 WhisperLiveKitSttAdapter s16le framing):
+ *  1. 'pcm' IPC handler: renderer mic chunks (16 kHz Float32Array) -> validated
+ *     -> float32ToInt16 -> adapter.send. The renderer is a trust boundary, so
+ *     the sink throws on malformed chunks; the error is logged, never swallowed
+ *     silently and never allowed to crash the main process.
+ *  2. VEYRA_TEST_AUDIO seam (steps 21-22): when the env var names a WAV path,
+ *     that file is fed through adapter.send instead of renderer PCM.
+ */
+async function startCaptureBridge(): Promise<void> {
+  const adapter = createSttAdapter('local-whisperlivekit')
+  const sink = createPcmSink(adapter)
+  ipcMain.on('pcm', (_event, chunk: unknown) => {
+    try {
+      sink(chunk)
+    } catch (err) {
+      console.error('[capture] rejected PCM chunk:', err instanceof Error ? err.message : err)
+    }
+  })
+
+  const testAudio = process.env['VEYRA_TEST_AUDIO']
+  if (testAudio) {
+    try {
+      await adapter.connect()
+      const { samples, chunks } = await feedWavToAdapter(testAudio, adapter)
+      await adapter.close()
+      console.log(
+        `[capture] VEYRA_TEST_AUDIO: fed ${samples} samples in ${chunks} chunks from ${testAudio}`
+      )
+    } catch (err) {
+      console.error('[capture] VEYRA_TEST_AUDIO failed:', err instanceof Error ? err.message : err)
+    }
+  }
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -59,6 +97,7 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.veyra.app')
 
   registerIpcHandlers()
+  void startCaptureBridge()
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

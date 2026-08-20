@@ -7,7 +7,10 @@ const api = {
   // Step 8: settings:save persists via the main-process settings-store —
   // apiKey is safeStorage-encrypted in veyra-settings.json under userData.
   saveSettings: (settings: Settings): Promise<Settings> =>
-    ipcRenderer.invoke('settings:save', settings)
+    ipcRenderer.invoke('settings:save', settings),
+  // Step 17: mic capture ships 16 kHz Float32Array chunks to main over the
+  // 'pcm' channel; main validates + converts to int16 and calls adapter.send.
+  sendPcm: (chunk: Float32Array): void => ipcRenderer.send('pcm', chunk)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
