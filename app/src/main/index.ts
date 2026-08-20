@@ -1,38 +1,53 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
+import { app, BrowserWindow } from 'electron'
+import { writeFileSync } from 'fs'
+import { resolve } from 'path'
+import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { createMainWindow, createOverlayWindow } from './windows'
 
-function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
+/**
+ * Smoke mode (env VEYRA_SMOKE=1): once both windows are ready, wait 1500ms,
+ * write {mainWindow:{title,alwaysOnTop}, overlayWindow:{title,alwaysOnTop,bounds}}
+ * to VEYRA_SMOKE_OUT (default state/phase1-launch.json, resolved against cwd),
+ * then quit — the run is self-terminating.
+ */
+function armSmoke(mainWindow: BrowserWindow, overlay: BrowserWindow): void {
+  let mainReady = false
+  let overlayReady = false
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  const finish = (): void => {
+    if (!mainReady || !overlayReady) return
+    setTimeout(() => {
+      const payload = {
+        mainWindow: {
+          title: mainWindow.getTitle(),
+          alwaysOnTop: mainWindow.isAlwaysOnTop()
+        },
+        overlayWindow: {
+          title: overlay.getTitle(),
+          alwaysOnTop: overlay.isAlwaysOnTop(),
+          bounds: overlay.getBounds()
+        }
+      }
+      const out = process.env['VEYRA_SMOKE_OUT'] ?? 'state/phase1-launch.json'
+      writeFileSync(resolve(process.cwd(), out), JSON.stringify(payload, null, 2))
+      app.quit()
+    }, 1500)
   }
+
+  mainWindow.once('ready-to-show', () => {
+    mainReady = true
+    finish()
+  })
+  overlay.once('ready-to-show', () => {
+    overlayReady = true
+    finish()
+  })
+}
+
+function launchWindows(): void {
+  const mainWindow = createMainWindow()
+  const overlay = createOverlayWindow()
+  if (process.env['VEYRA_SMOKE'] === '1') armSmoke(mainWindow, overlay)
 }
 
 // This method will be called when Electron has finished
@@ -40,7 +55,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.veyra.app')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -49,15 +64,12 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
-  createWindow()
+  launchWindows()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) launchWindows()
   })
 })
 

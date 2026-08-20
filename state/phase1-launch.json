@@ -1,0 +1,16 @@
+{
+  "mainWindow": {
+    "title": "VEYRA",
+    "alwaysOnTop": false
+  },
+  "overlayWindow": {
+    "title": "VEYRA Overlay",
+    "alwaysOnTop": true,
+    "bounds": {
+      "x": 640,
+      "y": 456,
+      "width": 640,
+      "height": 120
+    }
+  }
+}
