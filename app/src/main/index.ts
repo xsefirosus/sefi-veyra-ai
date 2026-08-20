@@ -11,6 +11,7 @@ import {
   writeLoopbackCheck
 } from './capture/loopback-energy'
 import { createSttAdapter } from '../shared/stt/stt-adapter'
+import { labelForSource } from '../shared/stt/speaker-label'
 import type { TranscriptEvent } from '../shared/types'
 import { broadcastTranscriptEvent } from './transcript/transcript-broadcast'
 import { float32ToInt16 } from '../shared/audio/format'
@@ -94,12 +95,16 @@ async function startCaptureBridge(): Promise<void> {
   // Step 18: adapter transcript events -> 'transcript-event' to BOTH windows.
   // The source tag is the capture track (this bridge is the step-17 mic track;
   // step 19 adds the loopback track as its own adapter + source).
+  // Step 20: labelForSource maps the capture track to the speaker label before
+  // broadcast ('mic' -> 'me'). The reducer also defaults an absent speaker, but
+  // main never leaves it absent on this path.
   const source: TranscriptEvent['source'] = 'mic'
+  const speaker: TranscriptEvent['speaker'] = labelForSource(source)
   adapter.onPartial((text, seq) => {
-    broadcastTranscript({ source, kind: 'partial', text, seq, ts: Date.now() })
+    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
   })
   adapter.onFinal((text, seq) => {
-    broadcastTranscript({ source, kind: 'final', text, seq, ts: Date.now() })
+    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
   })
   adapter.onError((err) => {
     console.error('[capture] STT adapter error:', err)
@@ -221,12 +226,14 @@ function startLoopbackBridge(): void {
     }
   })
 
+  // Step 20: same labeling as the mic bridge, mapping 'loopback' -> 'other'.
   const source: TranscriptEvent['source'] = 'loopback'
+  const speaker: TranscriptEvent['speaker'] = labelForSource(source)
   adapter.onPartial((text, seq) => {
-    broadcastTranscript({ source, kind: 'partial', text, seq, ts: Date.now() })
+    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
   })
   adapter.onFinal((text, seq) => {
-    broadcastTranscript({ source, kind: 'final', text, seq, ts: Date.now() })
+    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
   })
   adapter.onError((err) => {
     console.error('[loopback] STT adapter error:', err)

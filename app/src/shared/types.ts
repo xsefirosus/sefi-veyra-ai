@@ -13,6 +13,11 @@
  * segment, the final with the same seq is its committed text); `seq` is the
  * adapter's monotonically increasing segment sequence number; `ts` is
  * epoch-ms when the event was produced.
+ *
+ * `speaker` (step 20) is the labelForSource label main applies before
+ * broadcast: 'mic' -> 'me', anything else -> 'other'. Optional because events
+ * may be constructed before that point (the step-15 context parser); the
+ * step-18 reducer defaults an absent speaker to 'unknown'.
  */
 export interface TranscriptEvent {
   source: 'mic' | 'loopback'
@@ -20,6 +25,7 @@ export interface TranscriptEvent {
   text: string
   seq: number
   ts: number
+  speaker?: 'me' | 'other'
 }
 
 /**

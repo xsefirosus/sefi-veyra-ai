@@ -88,4 +88,20 @@ describe('transcript-reducer (plan step 18)', () => {
       toTranscriptAction({ source: 'loopback', kind: 'final', text: 'done', seq: 1, ts: 2 })
     ).toEqual({ type: 'final', seq: 1, text: 'done' })
   })
+
+  it('toTranscriptAction passes the step-20 speaker label through to the action', () => {
+    expect(
+      toTranscriptAction({ source: 'mic', kind: 'partial', text: 'hi', seq: 0, ts: 1, speaker: 'me' })
+    ).toEqual({ type: 'partial', seq: 0, text: 'hi', speaker: 'me' })
+    expect(
+      toTranscriptAction({
+        source: 'loopback',
+        kind: 'final',
+        text: 'done',
+        seq: 1,
+        ts: 2,
+        speaker: 'other'
+      })
+    ).toEqual({ type: 'final', seq: 1, text: 'done', speaker: 'other' })
+  })
 })

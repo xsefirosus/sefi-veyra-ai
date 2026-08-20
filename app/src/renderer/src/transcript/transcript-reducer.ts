@@ -10,9 +10,11 @@
  *
  * Speaker: the action carries an optional `speaker` ('me'|'other'|'unknown');
  * absent, it defaults to 'unknown'. When a final carries no speaker, the
- * pending partial's speaker is PRESERVED onto the committed line. Plan step 20
- * tags adapter events with speaker in main (labelForSource) before dispatch;
- * until then every event arrives speaker-less and lines read 'unknown'.
+ * pending partial's speaker is PRESERVED onto the committed line. Step 20 tags
+ * adapter events with speaker in main (labelForSource: 'mic' -> 'me', anything
+ * else -> 'other') before broadcast; toTranscriptAction passes event.speaker
+ * through, so in practice lines read 'me' or 'other' and 'unknown' is only the
+ * fallback for events that arrive without a label.
  */
 import type { TranscriptEvent } from '../../../shared/types'
 
@@ -74,5 +76,5 @@ export function transcriptReducer(
 
 /** Map a main-process TranscriptEvent to a reducer action (useTranscript dispatch). */
 export function toTranscriptAction(event: TranscriptEvent): TranscriptAction {
-  return { type: event.kind, seq: event.seq, text: event.text }
+  return { type: event.kind, seq: event.seq, text: event.text, speaker: event.speaker }
 }
