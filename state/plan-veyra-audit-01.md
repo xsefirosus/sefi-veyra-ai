@@ -81,7 +81,7 @@ have to break it.
 
 ## Steps
 
-- [ ] 1. **Make the unit suite environment-independent (fixes the 6 red tests).**
+- [ ] 1. **Make the unit suite environment-independent (fixes the 6 red tests).** (needs: -)
   `npm test` currently reports `6 failed | 100 passed`; every failure is
   `wlk-server: venv wlk missing at .../.wlk-venv/bin/wlk`, thrown from
   `wlkBinPath()` at `src/main/stt/wlk-server.ts:97` via the `WlkServer`
@@ -93,9 +93,9 @@ have to break it.
   required explicit binary argument at its call sites, or a lazily-resolved one.
   Update `tests/wlk-server.test.ts` to inject a fake path. Verify: `npm test`
   reports 0 failures with `.wlk-venv` absent (confirm with
-  `test ! -e app/.wlk-venv` first). Commit. (needs: -)
+  `test ! -e app/.wlk-venv` first). Commit.
 
-- [ ] 2. **Extract a `CaptureSession` lifecycle owner (main).** New
+- [ ] 2. **Extract a `CaptureSession` lifecycle owner (main).** (needs: 1) New
   `src/main/capture/capture-session.ts`. One class owning the full ordered
   lifecycle that no code performs today: `start(settings)` → spawn `WlkServer`
   with `settings.sttModel` → `await adapter.connect()` for each active track →
@@ -107,9 +107,9 @@ have to break it.
   `app/tests/capture-session.test.ts`: start→listening, double-start rejects,
   stop before start is a no-op, adapter-connect failure lands in `error` with
   `lastError` set and the server shut down (no orphan process). Verify:
-  `npm test` passes. Commit. (needs: 1)
+  `npm test` passes. Commit.
 
-- [ ] 3. **Wire the session into main and delete the dead bridge paths.** In
+- [ ] 3. **Wire the session into main and delete the dead bridge paths.** (needs: 2) In
   `src/main/index.ts`, replace `startCaptureBridge`/`startLoopbackBridge` with
   `CaptureSession`. The `ipcMain.on('pcm')`/`'pcm-loopback'` handlers stay
   (same `createPcmSink` trust-boundary validation) but route to the session's
@@ -120,9 +120,9 @@ have to break it.
   windows on a `session-state` channel. Keep `VEYRA_TEST_AUDIO` and
   `VEYRA_LOOPBACK_CHECK` working unchanged — the harness paths must not regress.
   Verify: `npm test`, `npm run build`, and the step-21 e2e harness still exits 0.
-  Commit. (needs: 2)
+  Commit.
 
-- [ ] 4. **Call the capture code that is currently orphaned (renderer).**
+- [ ] 4. **Call the capture code that is currently orphaned (renderer).** (needs: 3)
   `startMicCapture` (`src/renderer/src/capture/mic-capture.ts:55`) has **zero
   call sites in the entire repo** — verified by grep across `src/` and `tests/`.
   `startLoopbackCapture` is called only under `window.api.loopbackCheckMode`
@@ -132,9 +132,9 @@ have to break it.
   never reach `getUserMedia`) and start loopback capture; on `stopping`/`idle`,
   stop both handles and release the tracks. Surface the `onFallback`
   (`scriptprocessor`) mode so the UI can show it. Verify: `npm test` passes;
-  `npm run build` passes. Commit. (needs: 3)
+  `npm run build` passes. Commit.
 
-- [ ] 5. **Add the Start/Stop control and status indicator (UI).** There is no
+- [ ] 5. **Add the Start/Stop control and status indicator (UI).** (needs: 4) There is no
   way to begin a session in the app today. In `SettingsScreen` (or a new header
   bar shared by both windows) add a primary Start/Stop listening button bound to
   `session:start`/`session:stop`, plus a status chip driven by `session-state`:
@@ -143,9 +143,9 @@ have to break it.
   (`TranscriptPanel.tsx:41`), which currently lies whenever nothing is running.
   Model download on first `base`/`small` run takes minutes: `starting` must say
   so rather than appear hung. Tests: reducer/state-mapping unit tests for the
-  status chip. Verify: `npm test`. Commit. (needs: 4)
+  status chip. Verify: `npm test`. Commit.
 
-- [ ] 6. **Make the STT factory injectable.** `createSttAdapter` in
+- [ ] 6. **Make the STT factory injectable.** (needs: 1) `createSttAdapter` in
   `src/shared/stt/stt-adapter.ts` takes no options and always constructs
   `new WhisperLiveKitSttAdapter()` (`createLazyLocalAdapter`, `:71`), so both
   the mic and loopback adapters are built with `source: 'mic'` and the default
@@ -153,9 +153,9 @@ have to break it.
   through the factory and the lazy facade. This is the seam approach decision 2's
   fallback (a second wlk on another port) depends on. Update
   `tests/stt-adapter.test.ts` to assert options reach the constructed adapter.
-  Verify: `npm test`. Commit. (needs: 1)
+  Verify: `npm test`. Commit.
 
-- [ ] 7. **Prove or disprove concurrent wlk WS sessions.** The code comment at
+- [ ] 7. **Prove or disprove concurrent wlk WS sessions.** (needs: 6) The code comment at
   `src/main/index.ts:211` still records this as UNKNOWN while the dual-track
   design depends on it. Write `scripts/probe-wlk-concurrent.mjs` (portable Node,
   mirroring `probe-wlk.mjs`): start one wlk, open TWO `/asr` sockets, stream the
@@ -164,9 +164,9 @@ have to break it.
   session2Messages, note}`. If FALSE: switch the loopback track to a second
   `WlkServer` on port 8001 using the step-6 factory options, and record the
   change in the same artifact. Never assume the answer — write what was measured.
-  Commit script + artifact. (needs: 6)
+  Commit script + artifact.
 
-- [ ] 8. **Fix duplicate and lost final segments (the biggest correctness bug).**
+- [ ] 8. **Fix duplicate and lost final segments (the biggest correctness bug).** (needs: 1)
   `normalizeWlkMessage` (`src/shared/stt/context-parser.ts`) emits a `final`
   from `lastNonEmptyLineText(parsed.lines)` on **every** status message whose
   last line has text. wlk's `lines[]` is cumulative AND revised in place —
@@ -186,9 +186,9 @@ have to break it.
   appending. Update `tests/context-parser.test.ts` to assert against the real
   fixture: replaying all 14 messages must yield exactly **one** committed
   segment whose final text is `"testing 1, 2, 3. This is the Vero meeting
-  transcription test"` — not two, not 46. Verify: `npm test`. Commit. (needs: 1)
+  transcription test"` — not two, not 46. Verify: `npm test`. Commit.
 
-- [ ] 9. **Fix cross-track seq collision and segment-keyed reducer state.** Each
+- [ ] 9. **Fix cross-track seq collision and segment-keyed reducer state.** (needs: 8) Each
   adapter instance owns a private `seq` starting at 0
   (`whisper-livekit.ts:142`), so the mic track and the loopback track both emit
   seq 0, 1, 2… The reducer matches pending partials by seq ALONE
@@ -205,9 +205,8 @@ have to break it.
   `tests/transcript-reducer.test.ts`: interleaved mic+loopback streams with
   colliding seq values produce two independent lines; a revision replaces rather
   than appends; the cap evicts oldest-first. Verify: `npm test`. Commit.
-  (needs: 8)
 
-- [ ] 10. **Use wlk diarization for speaker labels.** `labelForSource`
+- [ ] 10. **Use wlk diarization for speaker labels.** (needs: 8) `labelForSource`
   (`src/shared/stt/speaker-label.ts`) maps `mic → me`, everything else →
   `other`, and the parser docstring explicitly drops the real `speaker` field.
   The fixture proves wlk supplies it (`lines[0].speaker === 1`). Because the mic
@@ -220,9 +219,8 @@ have to break it.
   `me`), and keep `labelForSource` as the fallback when diarization is absent.
   Tests `tests/speaker-label.test.ts`: diarization present wins; absent falls
   back; unknown stays conservative (`other`). Verify: `npm test`. Commit.
-  (needs: 8)
 
-- [ ] 11. **Fix the settings round-trip (currently write-only).**
+- [ ] 11. **Fix the settings round-trip (currently write-only).** (needs: 5)
   `registerIpcHandlers` registers `settings:load` (`settings-store.ts`), but the
   preload exposes no `loadSettings` and `SettingsScreen` initializes from
   `initialSettings` unconditionally (`SettingsScreen.tsx:24`) — so a saved Gemini
@@ -234,18 +232,18 @@ have to break it.
   a silent unhandled rejection — add error state and surface it. Reset the
   `saved` flag on the next edit (today "Settings saved" persists forever). Tests:
   hydration on mount, save-failure surfaces an error, flag resets. Verify:
-  `npm test`. Commit. (needs: 5)
+  `npm test`. Commit.
 
-- [ ] 12. **Surface STT/session errors to the user.** Adapter errors are
+- [ ] 12. **Surface STT/session errors to the user.** (needs: 5, 3) Adapter errors are
   swallowed into `console.error` in main (`index.ts:110`, `:239`) where no user
   will ever see them; a failed wlk spawn or a dropped socket presents as an app
   that simply shows nothing. Route `adapter.onError` and `CaptureSession` errors
   through the step-3 `session-state` broadcast into the step-5 status chip, with
   the message text. Verify: `npm test`; simulate a spawn failure (point `WLK_BIN`
   at a nonexistent path) and confirm the UI reports it rather than hanging in
-  `starting`. Commit. (needs: 5, 12 depends on 3)
+  `starting`. Commit.
 
-- [ ] 13. **Add wlk crash/disconnect recovery.** Nothing restarts the server or
+- [ ] 13. **Add wlk crash/disconnect recovery.** (needs: 12) Nothing restarts the server or
   reconnects the socket today: `WlkServer.start()` polls once at boot, the
   `child.on('exit')` handler only nulls the reference (`wlk-server.ts:185-189`),
   and `NodeWsTransport` has no reconnect (`whisper-livekit.ts:101`) — a mid-meeting
@@ -254,9 +252,9 @@ have to break it.
   exhausted) and socket reconnect that preserves the transcript already
   committed. Tests with injected fakes: exit triggers restart; repeated failure
   gives up and reports; reconnect does not duplicate committed segments.
-  Verify: `npm test`. Commit. (needs: 12)
+  Verify: `npm test`. Commit.
 
-- [ ] 14. **Portable setup scripts + cross-platform capture path.** All four
+- [ ] 14. **Portable setup scripts + cross-platform capture path.** (needs: 1) All four
   scripts are PowerShell-only (`setup-wlk.ps1`, `synth-speech.ps1`,
   `check-loopback.ps1`, and `probe-wlk.mjs`'s documented invocation), so a
   macOS or Linux contributor cannot install wlk or run any verification; the
@@ -266,9 +264,9 @@ have to break it.
   posix branch (`.wlk-venv/bin/wlk`) actually resolves after a posix install.
   macOS loopback (BlackHole) stays PENDING — document, do not claim.
   Verify: `scripts/setup-wlk.mjs` completes on this Linux container and
-  `wlk --help` exits 0. Commit. (needs: 1)
+  `wlk --help` exits 0. Commit.
 
-- [ ] 15. **Anti-aliased downsampling + real dual-track latency re-measure.**
+- [ ] 15. **Anti-aliased downsampling + real dual-track latency re-measure.** (needs: 9, 7)
   `downsample` (`src/shared/audio/format.ts`) is naive linear interpolation with
   no low-pass prefilter, so 48 kHz → 16 kHz folds everything above 8 kHz back
   into the band as aliasing noise — it degrades STT accuracy on exactly the
@@ -280,9 +278,9 @@ have to break it.
   characterize the real product path. Never carry the old number forward.
   Tests: `tests/format.test.ts` gains an alias-rejection assertion (a tone above
   Nyquist must attenuate, not fold). Verify: `npm test`; artifact written with
-  real numbers. Commit. (needs: 9, 7)
+  real numbers. Commit.
 
-- [ ] 16. **Overlay and layout UX pass.** Concrete defects found:
+- [ ] 16. **Overlay and layout UX pass.** (needs: 5) Concrete defects found:
   (a) the overlay is `frame: false` with no `-webkit-app-region: drag` region
   and `resizable: false` (`windows.ts:60-71`) — the user cannot move or resize
   it, and it is never positioned, so it opens centered while `state/demo-p2.md`
@@ -301,9 +299,9 @@ have to break it.
   transcript text selectable with a copy affordance, put the transcript
   above/beside settings, pin-to-bottom on new lines unless the user scrolled up,
   and re-enumerate devices post-permission. Verify: `npm run build`; confirm
-  each in the step-18 live pass. Commit. (needs: 5)
+  each in the step-18 live pass. Commit.
 
-- [ ] 17. **Reshape the LLM seam for Phase 3-4 (declare only, still no Gemini).**
+- [ ] 17. **Reshape the LLM seam for Phase 3-4 (declare only, still no Gemini).** (needs: 1)
   `LlmAdapter.streamSuggestions(ctx)` (`src/shared/llm/llm-adapter.ts`) yields
   whole `Suggestion` objects, takes only `{events, meetingId}`, and has no
   cancellation. Phase 4's own criterion is "sub-3-4 s to first suggestion
@@ -316,9 +314,9 @@ have to break it.
   notes, docs) on `TranscriptContext`. Keep it interface-only — no provider code,
   no model string (still UNKNOWN, must come from settings/env in Phase 4).
   Update `tests/llm-adapter.test.ts`: a mock streams deltas, honors an abort, and
-  accepts a persona. Verify: `npm test`. Commit. (needs: 1)
+  accepts a persona. Verify: `npm test`. Commit.
 
-- [ ] 18. **VERIFICATION GATE + first live-mic pass (human checkpoint).**
+- [ ] 18. **VERIFICATION GATE + first live-mic pass (human checkpoint).** (needs: 5, 9, 10, 11, 13, 15, 16, 17)
   Agent half: `npm test` (0 failures, and confirm the count grew — the audit
   baseline is 106 tests), `npm run typecheck`, `npm run lint` (0 errors; also
   clear the 18 prettier warnings with `--fix`), `npm run build`, then the e2e
@@ -332,7 +330,7 @@ have to break it.
   Human half (cannot be delegated): `npm run dev`, press Start, speak, confirm
   `me` lines; play system audio, confirm `other` lines; confirm the overlay can
   be moved and the transcript copied. Nothing here is claimed as done until the
-  human reports back. Commit. (needs: 5, 9, 10, 11, 13, 15, 16, 17)
+  human reports back. Commit.
 
 ## Files Touched
 - New: `app/src/main/capture/capture-session.ts`,
