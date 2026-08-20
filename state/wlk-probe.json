@@ -1,0 +1,26 @@
+{
+  "step": 14,
+  "createdAt": "2026-08-20T05:23:48.277Z",
+  "model": "tiny",
+  "host": "127.0.0.1",
+  "port": 8000,
+  "wsUrl": "ws://127.0.0.1:8000/asr",
+  "pcmInput": true,
+  "reusedServer": false,
+  "cudaNote": "CUDA_VISIBLE_DEVICES=-1 set on the spawned wlk: faster-whisper encoder device=auto (simul_whisper/backend.py:430) picked CUDA (driver present, cublas64_12.dll missing from venv); -1 forces CPU (verified get_cuda_device_count 1->0)",
+  "fixture": "D:\\Projects\\Sefi-Veyra-AI\\app\\tests\\fixtures\\wlk-messages.json",
+  "wav": {
+    "path": "D:\\Projects\\Sefi-Veyra-AI\\app\\assets\\test-speech.wav",
+    "sampleRate": 16000,
+    "channels": 1,
+    "bitsPerSample": 16,
+    "pcmBytes": 169280,
+    "seconds": 5.29
+  },
+  "messageCount": 14,
+  "firstPartialMs": 692,
+  "firstPartialCriterion": "ms from first PCM byte sent to first message after the config message whose JSON text matches /testing|veyra|meeting/i",
+  "firstPartialMessage": "{\"status\":\"active_transcription\",\"lines\":[{\"speaker\":-2,\"text\":\"\",\"start\":\"0:00:04.70\",\"end\":\"0:00:05.29\"}],\"buffer_transcription\":\" Testing 1\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0,\"remaining_time_transcription_processing\":3.9,\"remaining_time_transcription_policy\":1.4,\"remaining_time_diarization\":0}",
+  "testingMatched": true,
+  "matchedMessage": "{\"status\":\"active_transcription\",\"lines\":[{\"speaker\":-2,\"text\":\"\",\"start\":\"0:00:04.70\",\"end\":\"0:00:05.29\"}],\"buffer_transcription\":\" Testing 1\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0,\"remaining_time_transcription_processing\":3.9,\"remaining_time_transcription_policy\":1.4,\"remaining_time_diarization\":0}"
+}
