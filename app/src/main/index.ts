@@ -6,6 +6,17 @@ import { createMainWindow, createOverlayWindow } from './windows'
 import { registerIpcHandlers } from './settings-store'
 import { createPcmSink, feedWavToAdapter } from './capture/audio-input'
 import { createSttAdapter } from '../shared/stt/stt-adapter'
+import type { TranscriptEvent } from '../shared/types'
+import { broadcastTranscriptEvent } from './transcript/transcript-broadcast'
+
+// Step 18: the two windows, held at module scope so the capture bridge can
+// broadcast transcript events to BOTH (see broadcastTranscript below).
+let mainWindow: BrowserWindow | null = null
+let overlayWindow: BrowserWindow | null = null
+
+function broadcastTranscript(event: TranscriptEvent): void {
+  broadcastTranscriptEvent([mainWindow, overlayWindow], event)
+}
 
 /**
  * Smoke mode (env VEYRA_SMOKE=1): once both windows are ready, wait 1500ms,
@@ -48,9 +59,9 @@ function armSmoke(mainWindow: BrowserWindow, overlay: BrowserWindow): void {
 }
 
 function launchWindows(): void {
-  const mainWindow = createMainWindow()
-  const overlay = createOverlayWindow()
-  if (process.env['VEYRA_SMOKE'] === '1') armSmoke(mainWindow, overlay)
+  mainWindow = createMainWindow()
+  overlayWindow = createOverlayWindow()
+  if (process.env['VEYRA_SMOKE'] === '1') armSmoke(mainWindow, overlayWindow)
 }
 
 /**
@@ -72,6 +83,20 @@ async function startCaptureBridge(): Promise<void> {
     } catch (err) {
       console.error('[capture] rejected PCM chunk:', err instanceof Error ? err.message : err)
     }
+  })
+
+  // Step 18: adapter transcript events -> 'transcript-event' to BOTH windows.
+  // The source tag is the capture track (this bridge is the step-17 mic track;
+  // step 19 adds the loopback track as its own adapter + source).
+  const source: TranscriptEvent['source'] = 'mic'
+  adapter.onPartial((text, seq) => {
+    broadcastTranscript({ source, kind: 'partial', text, seq, ts: Date.now() })
+  })
+  adapter.onFinal((text, seq) => {
+    broadcastTranscript({ source, kind: 'final', text, seq, ts: Date.now() })
+  })
+  adapter.onError((err) => {
+    console.error('[capture] STT adapter error:', err)
   })
 
   const testAudio = process.env['VEYRA_TEST_AUDIO']

@@ -13,6 +13,16 @@ const baseWebPreferences = {
   sandbox: false
 }
 
+// The overlay window renders a DIFFERENT screen than the main window (both
+// load the same renderer bundle; plan step 18). The role is passed via
+// additionalArguments -- the documented Electron mechanism for per-window
+// preload-visible flags -- and resolved by the preload
+// (src/preload/transcript-api.ts: resolveWindowRole(process.argv)).
+const overlayWebPreferences = {
+  ...baseWebPreferences,
+  additionalArguments: ['--veyra-window=overlay']
+}
+
 function loadRenderer(win: BrowserWindow): void {
   // HMR for renderer based on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
@@ -57,7 +67,7 @@ export function createOverlayWindow(): BrowserWindow {
     skipTaskbar: true,
     resizable: false,
     show: false,
-    webPreferences: baseWebPreferences
+    webPreferences: overlayWebPreferences
   })
 
   // Attempt to exclude the overlay from screen-share capture. Support finding on

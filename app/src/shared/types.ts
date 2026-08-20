@@ -21,3 +21,10 @@ export interface TranscriptEvent {
   seq: number
   ts: number
 }
+
+/**
+ * IPC channel carrying transcript events from main to the renderers (plan
+ * step 18). Main broadcasts TranscriptEvents here to BOTH windows; the preload
+ * exposes window.api.onTranscriptEvent(cb) over this channel.
+ */
+export const TRANSCRIPT_EVENT_CHANNEL = 'transcript-event'
