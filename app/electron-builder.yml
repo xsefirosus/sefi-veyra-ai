@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: app
+appId: com.veyra.app
+productName: VEYRA
 directories:
   buildResources: build
 files:
