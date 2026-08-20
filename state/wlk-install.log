@@ -1,0 +1,74 @@
+# wlk install log — step 12 (WhisperLiveKit local STT server)
+
+Installed 2026-08-20 on win32 (PowerShell 5.1), repo D:/Projects/Sefi-Veyra-AI, branch
+claude/meeting-transcription-ai-app-k8t8hy, venv app/.wlk-venv (python 3.11.15).
+
+## README verification (anti-hallucination registry entry — was UNKNOWN before this step)
+
+README source: https://github.com/QuentinFuxa/WhisperLiveKit (raw fetch of
+raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/main/README.md, HTTP 200, 29,933 bytes).
+
+- pip package name: `whisperlivekit` — README "Installation & Quick Start" says verbatim
+  `pip install whisperlivekit`; PyPI badge links https://pypi.org/project/whisperlivekit/.
+  CONFIRMED matches the plan's research digest.
+- CLI entry point: `wlk` — README "Quick Start" shows `wlk --model base --language en`,
+  `wlk run whisper:tiny`, `wlk transcribe meeting.wav`, etc. CONFIRMED matches the digest.
+  On Windows the console script is app/.wlk-venv/Scripts/wlk.exe.
+- Python support: README badge "python-3.11--3.13". This machine: 3.11.15 (state/env-probe.md)
+  and the venv reports Python 3.11.15. In range.
+
+## Discrepancies vs the plan's research digest (recorded, not papered over)
+
+1. Default server port: the README says `--port` default is `8000` and the native WebSocket
+   endpoint is `ws://localhost:8000/asr`. The plan digest said default 9090. Step 13 must
+   confirm the host/port flag names and defaults from `wlk serve --help` before hardcoding.
+2. Installed version: whisperlivekit 0.2.24 (plan Objective said v0.2.23 — pip resolved the
+   newer release; requirement is the package itself, no pin requested).
+3. CLI shape: the installed `wlk --help` shows a subcommand structure (serve/listen/run/
+   transcribe/bench/diagnose/models/pull/rm/check) with `serve` the default; the README's
+   older top-level `wlk --model ...` examples map onto `wlk serve ...` now. Server flags
+   (--model/--host/--port) live under `wlk serve --help` — step 13 must read that.
+4. Cosmetic: `wlk --help` prints "WhisperLiveKit <replacement char> Local speech-to-text
+   toolkit" — the em-dash is mangled by the console codepage (cp1252); help text is
+   otherwise intact. No functional impact.
+
+## Install tail (from the run of scripts/setup-wlk.ps1)
+
+```
+==> python -m venv D:\Projects\Sefi-Veyra-AI\app\.wlk-venv
+==> upgrading pip in venv
+Successfully installed pip-26.2.1
+==> pip install whisperlivekit (torch/faster-whisper is GBs -- long wall-clock)
+Collecting whisperlivekit
+  Downloading whisperlivekit-0.2.24-py3-none-any.whl.metadata (41 kB)
+Downloading torch-2.13.0-cp311-cp311-win_amd64.whl (122.0 MB)
+Successfully installed ... whisperlivekit-0.2.24
+  (full: fastapi-0.141.1 faster-whisper-1.2.1 ctranslate2-4.8.1 onnxruntime-1.29.0
+   torch-2.13.0 torchaudio-2.11.0 librosa-0.11.0 soundfile-0.14.0 uvicorn-0.52.4
+   websockets-17.0.1 huggingface-hub-1.28.0 tiktoken-0.14.0 numpy-2.4.6 + 50 more)
+==> verifying venv CLI: D:\Projects\Sefi-Veyra-AI\app\.wlk-venv\Scripts\wlk.exe --help
+WhisperLiveKit - Local speech-to-text toolkit
+Usage: wlk <command> [options]
+Commands: serve (default) | listen | run | transcribe | bench | diagnose | models | pull | rm | check
+OK: whisperlivekit installed into D:\Projects\Sefi-Veyra-AI\app\.wlk-venv; CLI wlk responds to --help
+```
+
+Full untruncated run output: temp copy at %TEMP%\opencode\wlk-install-run.log (not committed).
+
+## Verification (all exit codes real, re-run after the script finished)
+
+- `app\.wlk-venv\Scripts\wlk.exe --help` -> exit 0 (help text printed, entry point `wlk` confirmed)
+- `app\.wlk-venv\Scripts\python.exe --version` -> Python 3.11.15
+- `app\.wlk-venv\Scripts\pip.exe list` -> whisperlivekit 0.2.24, torch 2.13.0, faster-whisper 1.2.1
+- `git check-ignore app/.wlk-venv/Scripts/wlk.exe` -> matched by app/.gitignore:7 `.wlk-venv/` (exit 0)
+- venv is NOT in `git status --porcelain` (only scripts/ untracked + app/.gitignore modified)
+
+## PS 5.1 gotcha fixed in scripts/setup-wlk.ps1 (why the script is written this way)
+
+1. `pip.exe install --upgrade pip` fails on Windows ("To modify pip, please run the following
+   command") — pip refuses to replace its own console-script exe. Must use
+   `python -m pip install --upgrade pip`. The first run hit this and aborted; the script now
+   uses the `python -m` form and is idempotent (venv creation skipped on re-run).
+2. Under `$ErrorActionPreference='Stop'`, PS 5.1 treats native stderr as a terminating error
+   (NativeCommandError). Every native call is followed by `2>&1` + an explicit $LASTEXITCODE
+   check so the script fails on real exit codes, not on stderr noise.
