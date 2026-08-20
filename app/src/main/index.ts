@@ -1,8 +1,38 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, createOverlayWindow } from './windows'
+import type { Settings } from '../renderer/src/settings/settings-reducer'
+
+/**
+ * Step 7 settings:save seam — in-memory map ONLY. Disk persistence
+ * (safeStorage-encrypted veyra-settings.json) is plan step 8, which replaces
+ * this map with settings-store.ts. Nothing here touches the filesystem.
+ */
+const SETTINGS_CHANNEL = 'settings:save'
+const savedSettings = new Map<string, Settings>()
+
+function isSettings(value: unknown): value is Settings {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v['apiKey'] === 'string' &&
+    (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
+    (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null)
+  )
+}
+
+function registerIpcHandlers(): void {
+  ipcMain.handle(SETTINGS_CHANNEL, (_event, payload: unknown): Settings => {
+    // Trust boundary: the renderer is not trusted; reject malformed payloads.
+    if (!isSettings(payload)) {
+      throw new Error('settings:save payload failed validation')
+    }
+    savedSettings.set('user', payload)
+    return savedSettings.get('user')!
+  })
+}
 
 /**
  * Smoke mode (env VEYRA_SMOKE=1): once both windows are ready, wait 1500ms,
@@ -56,6 +86,8 @@ function launchWindows(): void {
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.veyra.app')
+
+  registerIpcHandlers()
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
