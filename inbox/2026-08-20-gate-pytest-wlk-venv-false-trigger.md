@@ -1,5 +1,5 @@
 ---
-status: needs-human
+status: approved
 reason: gate-red
 date: 2026-08-20
 source: software-engineer dispatch (step 12)
@@ -89,3 +89,28 @@ Human decision needed — mirror the 2026-08-19 approval:
 - eslint ignore fix committed separately (see git log).
 - Plan checkbox marked `- [x]` and committed separately ("plan: mark step 12 ... complete").
 - The gate remains RED (exit 5, pytest) — recorded here, not papered over.
+
+## Approval (2026-08-20)
+
+Human decision (user, recorded 2026-08-20): **"Extend fix class-wide"** — extends the
+2026-08-19 approval. gate.sh line 92 Python find exclusions now cover any depth:
+`-not -path '*/node_modules/*'` replaces `-not -path './node_modules/*'`, and
+`-not -path '*/.wlk-venv/*'` added. Minimal edit — only the line-92 exclusion list.
+Applied to BOTH copies, line endings preserved (active install LF, plugin cache CRLF):
+
+- `C:/Users/Mary Rose/.config/opencode/scripts/gate.sh` (active install) — MD5
+  `ECEE32243ABA50E3CC5B9274BA1A8AB5`
+- `C:/Users/Mary Rose/.cache/opencode/sefi-agents/plugins/sefi-core/scripts/gate.sh`
+  (plugin cache) — MD5 `A3C5A42EBB5FF41D036771AE983BA841`
+
+Verification (via git bash, active-install copy):
+
+- From `D:/Projects/Sefi-Veyra-AI/app` (has `.wlk-venv`, 10,103 .py files): **exit 0** —
+  `ok: npm-lint`, `ok: npm-typecheck`, `ok: npm-test`, `gate: PASSED (3 checks)`; no
+  ruff, no pytest (Python branch no longer triggers).
+- From repo root `D:/Projects/Sefi-Veyra-AI`: **exit 0** — `gate: no known toolchain
+  detected; nothing to run (pass)`; no pytest/ruff (root residual resolved;
+  `app/node_modules` covered by `*/node_modules/*`).
+
+gate.sh edits are outside the repo (shared install) and were not committed here; only
+this inbox note was committed.
