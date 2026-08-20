@@ -4,8 +4,8 @@ import type { Settings } from '../renderer/src/settings/settings-reducer'
 
 // Custom APIs for renderer
 const api = {
-  // Step 7: settings:save stores to an in-memory map in main. Disk persistence
-  // (safeStorage-encrypted) is plan step 8; this handler is replaced there.
+  // Step 8: settings:save persists via the main-process settings-store —
+  // apiKey is safeStorage-encrypted in veyra-settings.json under userData.
   saveSettings: (settings: Settings): Promise<Settings> =>
     ipcRenderer.invoke('settings:save', settings)
 }
