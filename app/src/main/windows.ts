@@ -1,7 +1,16 @@
-import { BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, screen, shell } from 'electron'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { dirname } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import {
+  MIN_OVERLAY_HEIGHT,
+  MIN_OVERLAY_WIDTH,
+  resolveOverlayBounds,
+  watchOverlayBounds,
+  type OverlayBounds
+} from './overlay-bounds'
 
 // Shared webPreferences: context isolation ON, node integration OFF, preload wired.
 // sandbox: false is kept from the electron-vite template (required for the
@@ -57,18 +66,61 @@ export function createMainWindow(): BrowserWindow {
   return mainWindow
 }
 
+/*
+ * Plan step 16(a): the overlay is user-movable (renderer drag region) and
+ * resizable now, and its position/size persist across restarts in
+ * userData/veyra-overlay-bounds.json -- validated on read by overlay-bounds.ts,
+ * with a bottom-center default for first run or a lost window (monitor change).
+ */
+const OVERLAY_BOUNDS_FILE = 'veyra-overlay-bounds.json'
+
+function overlayBoundsPath(): string {
+  return join(app.getPath('userData'), OVERLAY_BOUNDS_FILE)
+}
+
+function readPersistedOverlayRaw(): unknown {
+  try {
+    return JSON.parse(readFileSync(overlayBoundsPath(), 'utf8'))
+  } catch {
+    // First run / corrupt file -> default placement (resolveOverlayBounds).
+    return null
+  }
+}
+
+function saveOverlayBounds(bounds: OverlayBounds): void {
+  try {
+    const file = overlayBoundsPath()
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, JSON.stringify(bounds), 'utf8')
+  } catch (err) {
+    console.warn('[overlay] persisting bounds failed:', err instanceof Error ? err.message : err)
+  }
+}
+
 export function createOverlayWindow(): BrowserWindow {
+  // Requires app ready -- createOverlayWindow runs from launchWindows().
+  const workAreas = screen.getAllDisplays().map((d) => d.workArea)
+  const primaryWorkArea = screen.getPrimaryDisplay().workArea
+  const initial = resolveOverlayBounds(readPersistedOverlayRaw(), workAreas, primaryWorkArea)
+
   const overlay = new BrowserWindow({
     title: 'VEYRA Overlay',
-    width: 640,
-    height: 120,
+    x: initial.x,
+    y: initial.y,
+    width: initial.width,
+    height: initial.height,
+    minWidth: MIN_OVERLAY_WIDTH,
+    minHeight: MIN_OVERLAY_HEIGHT,
     alwaysOnTop: true,
     frame: false,
     skipTaskbar: true,
-    resizable: false,
+    resizable: true,
     show: false,
     webPreferences: overlayWebPreferences
   })
+
+  // Persist moves/resizes across restarts (debounced; flushed on close).
+  watchOverlayBounds(overlay, saveOverlayBounds)
 
   // Attempt to exclude the overlay from screen-share capture. Support finding on
   // this Electron/Windows version is recorded in state/overlay-capture-note.md.

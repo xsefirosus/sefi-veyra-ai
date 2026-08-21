@@ -16,15 +16,10 @@ import {
   settingsUiReducer,
   initialSettingsUiState
 } from './settings-persistence'
-import { LOOPBACK_DEVICE_ID } from '../capture/loopback-capture'
+import { deviceOptions, type AudioDeviceOption } from './device-options'
 import type { CaptureMode } from '../capture/mic-capture'
 
 const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
-
-interface AudioDeviceOption {
-  deviceId: string | null
-  label: string
-}
 
 interface SettingsScreenProps {
   settings?: Settings
@@ -71,12 +66,13 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
     dispatchUi({ type: 'edit' })
   }
 
-  // Audio device list feeds the device <select> (plan step 17 feeds this same
-  // list from the capture path; enumerateDevices is the zero-dependency source).
-  // Step 19 appends the virtual loopback track: "System audio (loopback)" is
-  // NOT an audioinput device -- it is the plan's dual-track second capture.
-  // The sentinel (LOOPBACK_DEVICE_ID) must never reach getUserMedia; the mic
-  // path is its only consumer and treats it as absent.
+  // Audio device list feeds the device <select>. Step 16(e): labels come back
+  // EMPTY from enumerateDevices() until microphone permission is granted, so
+  // (1) unlabeled devices get a friendly "Microphone N" placeholder instead of
+  // the raw deviceId hash, and (2) we re-enumerate when the permission flips to
+  // granted or whenever devices change -- real labels then flow in without a
+  // restart. The loopback sentinel entry ("System audio (loopback)") is NOT an
+  // audioinput device; it must never reach getUserMedia.
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
@@ -84,21 +80,48 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
       try {
         const found = await navigator.mediaDevices.enumerateDevices()
         if (cancelled) return
-        const inputs = found
-          .filter((d) => d.kind === 'audioinput')
-          .map((d) => ({ deviceId: d.deviceId, label: d.label || d.deviceId }))
-        setDevices([
-          { deviceId: null, label: 'System default' },
-          ...inputs,
-          { deviceId: LOOPBACK_DEVICE_ID, label: 'System audio (loopback)' }
-        ])
+        setDevices(
+          deviceOptions(
+            found
+              .filter((d) => d.kind === 'audioinput')
+              .map((d) => ({ deviceId: d.deviceId, label: d.label }))
+          )
+        )
       } catch {
-        // Enumeration can throw (permission/policy); the default entry still works.
+        // Enumeration can throw (permission/policy); the default entries still work.
       }
     }
     void load()
+
+    const onReenumerate = (): void => {
+      void load()
+    }
+
+    // Permission flip -> labels appear; re-enumerate on grant. Best-effort:
+    // not every runtime exposes the Permissions API for 'microphone'.
+    let permission: PermissionStatus | null = null
+    try {
+      void navigator.permissions
+        ?.query({ name: 'microphone' as PermissionName })
+        .then((status) => {
+          if (cancelled || !status) return
+          permission = status
+          status.addEventListener('change', onReenumerate)
+          if (status.state === 'granted') void load()
+        })
+        .catch(() => {
+          /* no permission API here: mount-time enumeration still applies */
+        })
+    } catch {
+      /* ditto */
+    }
+
+    navigator.mediaDevices?.addEventListener?.('devicechange', onReenumerate)
+
     return () => {
       cancelled = true
+      permission?.removeEventListener('change', onReenumerate)
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onReenumerate)
     }
   }, [])
 

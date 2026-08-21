@@ -10,9 +10,11 @@ import SessionControls from './session/SessionControls'
 import { useSessionState } from './session/use-session-state'
 
 /**
- * Main window: the VEYRA settings screen (step 7) PLUS the transcript panel
- * (step 18). The panel is added below the existing settings form; branding and
- * settings content are untouched.
+ * Main window: the VEYRA settings screen PLUS the transcript panel. Step
+ * 16(c): the panel renders ABOVE the settings form -- `.settings` used to be
+ * min-height: 100vh, pushing the transcript entirely below the fold; now both
+ * sit in one wrapping flex row (side-by-side when wide, transcript first when
+ * stacked).
  */
 function MainScreen(): React.JSX.Element {
   const { lines } = useTranscript()
@@ -52,8 +54,15 @@ function MainScreen(): React.JSX.Element {
   return (
     <div className="main-screen">
       <SessionControls settings={settings} />
-      <SettingsScreen settings={settings} dispatch={dispatch} captureFallback={capture.fallback} />
-      <TranscriptPanel lines={lines} variant="panel" sessionStatus={sessionStatus} />
+      {/* Step 16(c): transcript first -- visible above/beside settings. */}
+      <div className="main-columns">
+        <TranscriptPanel lines={lines} variant="panel" sessionStatus={sessionStatus} />
+        <SettingsScreen
+          settings={settings}
+          dispatch={dispatch}
+          captureFallback={capture.fallback}
+        />
+      </div>
     </div>
   )
 }

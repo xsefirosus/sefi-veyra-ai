@@ -280,7 +280,7 @@ have to break it.
   Nyquist must attenuate, not fold). Verify: `npm test`; artifact written with
   real numbers. Commit.
 
-- [ ] 16. **Overlay and layout UX pass.** (needs: 5) Concrete defects found:
+- [x] 16. **Overlay and layout UX pass.** (needs: 5) Concrete defects found:
   (a) the overlay is `frame: false` with no `-webkit-app-region: drag` region
   and `resizable: false` (`windows.ts:60-71`) — the user cannot move or resize
   it, and it is never positioned, so it opens centered while `state/demo-p2.md`
