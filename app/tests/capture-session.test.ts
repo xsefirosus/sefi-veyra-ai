@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
-import { CaptureSession, type CaptureAdapter, type CaptureServer } from '../src/main/capture/capture-session'
+import { describe, expect, it } from 'vitest'
+import {
+  CaptureSession,
+  type CaptureAdapter,
+  type CaptureServer
+} from '../src/main/capture/capture-session'
 
 /**
  * Seams under test (plan step 2):
@@ -13,7 +17,9 @@ import { CaptureSession, type CaptureAdapter, type CaptureServer } from '../src/
  * Pure lifecycle logic with injected fakes -- no Electron import.
  */
 
-function fakeServer(opts: { startImpl?: () => Promise<void>; shutdownImpl?: () => Promise<void> } = {}): CaptureServer & {
+function fakeServer(
+  opts: { startImpl?: () => Promise<void>; shutdownImpl?: () => Promise<void> } = {}
+): CaptureServer & {
   startCalls: number
   shutdownCalls: number
 } {
@@ -37,7 +43,9 @@ function fakeServer(opts: { startImpl?: () => Promise<void>; shutdownImpl?: () =
   }
 }
 
-function fakeAdapter(opts: { connectImpl?: () => Promise<void>; closeImpl?: () => Promise<void> } = {}): CaptureAdapter & {
+function fakeAdapter(
+  opts: { connectImpl?: () => Promise<void>; closeImpl?: () => Promise<void> } = {}
+): CaptureAdapter & {
   connectCalls: number
   closeCalls: number
 } {
@@ -101,7 +109,9 @@ describe('CaptureSession', () => {
     await session.start({ sttModel: 'tiny' })
     expect(session.state).toBe('listening')
 
-    await expect(session.start({ sttModel: 'tiny' })).rejects.toThrow(/cannot start while listening/)
+    await expect(session.start({ sttModel: 'tiny' })).rejects.toThrow(
+      /cannot start while listening/
+    )
     // No additional server creation after double-start
     expect(createCalls).toBe(1)
     expect(session.state).toBe('listening')
