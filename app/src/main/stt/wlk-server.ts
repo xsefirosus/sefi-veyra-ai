@@ -55,6 +55,9 @@ import { spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 
+/** Injectable spawn seam (audit step 13): structural twin of child_process.spawn. */
+export type SpawnLike = typeof spawn
+
 export type WlkModel = 'tiny' | 'base' | 'small'
 
 const WLK_MODELS: readonly WlkModel[] = ['tiny', 'base', 'small']
@@ -144,6 +147,32 @@ export interface WlkServerOptions {
   startTimeoutMs?: number
   /** Delay between connection attempts while polling. */
   pollIntervalMs?: number
+  /**
+   * Audit step 13: max automatic respawns after the child exits unexpectedly
+   * WHILE SERVING (default 3). Exhausting the budget is terminal: onGaveUp()
+   * listeners fire once with the reason; no further spawns happen until the
+   * caller starts/shuts down deliberately. A failed INITIAL start() keeps the
+   * step-12 contract -- it rejects, it never auto-restarts.
+   */
+  maxRestartAttempts?: number
+  /**
+   * Audit step 13: base delay of the exponential restart backoff -- the Nth
+   * attempt waits baseDelay * 2^(N-1) ms (1s, 2s, 4s ... with the default).
+   */
+  restartBaseDelayMs?: number
+  /**
+   * Injectable spawn seam (unit tests only): defaults to child_process.spawn.
+   * Fakes must emit 'exit' ASYNCHRONOUSLY (setImmediate) -- the handler reads
+   * fields assigned right after spawn() returns.
+   */
+  spawnImpl?: SpawnLike
+  /**
+   * Injectable readiness probe (unit tests only): resolves when the server is
+   * ready to accept ASR connections, rejects otherwise. Defaults to polling a
+   * real WebSocket against this.wsUrl; it must mirror that poll's contract of
+   * rejecting while this.child is absent (a dead child can never be ready).
+   */
+  probeImpl?: () => Promise<void>
 }
 
 /**
@@ -158,6 +187,15 @@ export interface WlkServerOptions {
  * venv existence check -- happens lazily in start(), at spawn time, so
  * constructing a WlkServer never touches the filesystem and unit tests run on
  * any machine, .wlk-venv or not.
+ *
+ * Audit step 13 (crash recovery): a child that exits UNEXPECTEDLY while
+ * serving is respawned with bounded exponential backoff (maxRestartAttempts x
+ * restartBaseDelayMs*2^n). A successful readiness probe resets the attempt
+ * budget. Exhausting the budget fires the onGaveUp() listeners once with a
+ * terminal error -- CaptureSession routes that into fail(), which lands on the
+ * step-12 path (state 'error' broadcast to both status chips). Deliberate
+ * shutdown() never triggers a restart; a failed INITIAL start() keeps the
+ * step-12 contract (rejects; no auto-restart).
  */
 export class WlkServer {
   readonly model: WlkModel
@@ -167,8 +205,29 @@ export class WlkServer {
   private readonly wlkBin: string | null
   private readonly startTimeoutMs: number
   private readonly pollIntervalMs: number
+  private readonly maxRestartAttempts: number
+  private readonly restartBaseDelayMs: number
+  private readonly spawnImpl: SpawnLike
+  private readonly probeOverride: (() => Promise<void>) | null
   private child: ChildProcess | null = null
   private logTail: string[] = []
+  // --- restart state (audit step 13) ---
+  /** Deliberate stop requested: cancels pending restarts, blocks new ones. */
+  private stopping = false
+  /** True once ANY readiness probe has passed; restarts only apply after this. */
+  private everReady = false
+  /** Restart budget exhausted: terminal until the next start(). */
+  private gaveUp = false
+  /** Attempts used since the last stable (probe-passed) period. */
+  private restartAttempts = 0
+  /**
+   * A recovery chain (pending backoff timer OR in-flight respawn attempt)
+   * owns the next scheduling decision: exit events observed while this is
+   * true are ignored, so exactly one chain exists per crash episode.
+   */
+  private recovering = false
+  private restartTimer: NodeJS.Timeout | null = null
+  private gaveUpCbs: Array<(err: Error) => void> = []
 
   constructor(model: WlkModel, opts: WlkServerOptions = {}) {
     this.model = model
@@ -179,14 +238,42 @@ export class WlkServer {
     this.wlkBin = opts.wlkBin ?? null
     this.startTimeoutMs = opts.startTimeoutMs ?? WLK_START_TIMEOUT_MS
     this.pollIntervalMs = opts.pollIntervalMs ?? 500
+    this.maxRestartAttempts = opts.maxRestartAttempts ?? 3
+    this.restartBaseDelayMs = opts.restartBaseDelayMs ?? 1000
+    this.spawnImpl = opts.spawnImpl ?? spawn
+    this.probeOverride = opts.probeImpl ?? null
   }
 
-  /** Spawn wlk and wait until its /asr WebSocket accepts a probe connection. */
+  /**
+   * Register the terminal handler for restart-budget exhaustion (audit step
+   * 13). CaptureSession registers one and routes the error into fail(); the
+   * listener list is snapshotted per emission so a listener that unsubscribes
+   * mid-emission cannot see its own callback re-entered.
+   */
+  onGaveUp(cb: (err: Error) => void): void {
+    this.gaveUpCbs.push(cb)
+  }
+
+  /**
+   * Spawn wlk and wait until its /asr WebSocket accepts a probe connection.
+   * Audit step 13: an unexpected exit of a READY server is recovered by
+   * scheduleRestart(); a failed initial start keeps rejecting to the caller.
+   */
   async start(): Promise<void> {
     if (this.child) throw new Error('wlk-server: already started')
     if (typeof WebSocket === 'undefined') {
       throw new Error('wlk-server: global WebSocket unavailable (needs Node >= 22)')
     }
+    this.stopping = false
+    this.everReady = false
+    this.gaveUp = false
+    this.recovering = false
+    this.restartAttempts = 0
+    await this.spawnOnce()
+  }
+
+  /** One spawn + readiness wait. Throws on failure; cleanup kills that child. */
+  private async spawnOnce(): Promise<void> {
     // Lazy resolution at spawn time (plan step 1): the venv path is looked up
     // -- and existence-checked, wlkBinPath() throws with a setup hint when the
     // binary is missing -- only when the caller did not inject an explicit bin.
@@ -204,7 +291,7 @@ export class WlkServer {
     // polling until the full timeout because 'exit' never fires. Capture it
     // so waitForAsr() can reject promptly with the real reason.
     let spawnError: Error | null = null
-    const child = spawn(cmd, args, {
+    const child = this.spawnImpl(cmd, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
       // CPU-only (see header): faster-whisper device=auto picks CUDA on this
@@ -219,20 +306,86 @@ export class WlkServer {
       spawnError = err instanceof Error ? err : new Error(String(err))
     })
     child.on('exit', () => {
-      // The process died on its own; the in-flight poll sees child === null and
-      // rejects with the captured log tail. A later shutdown() is a no-op.
-      this.child = null
+      // Stale-guard first: a late exit of a killed/replaced child must not
+      // null the CURRENT child's reference (audit step 13).
+      if (this.child === child) this.child = null
+      if (this.stopping || this.gaveUp || this.recovering || !this.everReady) return
+      this.scheduleRestart(
+        new Error(`wlk process exited unexpectedly (code=${String(child.exitCode)})`)
+      )
     })
     try {
-      await this.waitForAsr(() => spawnError)
+      if (this.probeOverride) await this.probeOverride()
+      else await this.waitForAsr(() => spawnError)
     } catch (err) {
-      await this.shutdown()
+      // Kill THIS attempt's child without touching restart policy flags: a
+      // failed respawn attempt must stay inside the retry budget (only
+      // deliberate shutdown() or a failed INITIAL start() set `stopping`).
+      await this.killChild()
       throw err
     }
+    this.everReady = true
   }
 
-  /** Kill the wlk child (whole tree on win32). Idempotent. */
+  /**
+   * Schedule one bounded-backoff respawn attempt (audit step 13). The Nth
+   * attempt waits restartBaseDelayMs * 2^(N-1); success resets the budget;
+   * exhausting maxRestartAttempts fires onGaveUp listeners once. A pending
+   * timer is cancelled by shutdown().
+   */
+  private scheduleRestart(reason: Error): void {
+    if (this.stopping || this.gaveUp) return
+    if (this.restartAttempts >= this.maxRestartAttempts) {
+      this.gaveUp = true
+      this.recovering = false
+      const err = new Error(
+        `wlk-server: crashed and gave up after ${this.maxRestartAttempts} restart attempt(s): ${reason.message}`
+      )
+      console.error('[wlk-server]', err.message)
+      for (const cb of [...this.gaveUpCbs]) {
+        try {
+          cb(err)
+        } catch {
+          // listener errors must not break recovery bookkeeping
+        }
+      }
+      return
+    }
+    const delay = this.restartBaseDelayMs * Math.pow(2, this.restartAttempts)
+    this.restartAttempts += 1
+    // The chain now owns scheduling: exit events during the backoff wait or
+    // the respawn attempt are ignored; the rejection handler below continues.
+    this.recovering = true
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null
+      if (this.stopping || this.gaveUp) return
+      void this.spawnOnce().then(
+        () => {
+          this.recovering = false
+          this.restartAttempts = 0 // stable again: full budget for next crash
+        },
+        (err: unknown) => {
+          this.scheduleRestart(err instanceof Error ? err : new Error(String(err)))
+        }
+      )
+    }, delay)
+  }
+
+  /**
+   * Kill the wlk child (whole tree on win32), cancelling any pending restart.
+   * Idempotent; safe before start(). Deliberate stop: never auto-restarts.
+   */
   async shutdown(): Promise<void> {
+    this.stopping = true
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer)
+      this.restartTimer = null
+    }
+    await this.killChild()
+  }
+
+  /** Kill the current child only; leaves restart-policy flags untouched. */
+  private async killChild(): Promise<void> {
     const child = this.child
     this.child = null
     if (!child || child.pid === undefined) return

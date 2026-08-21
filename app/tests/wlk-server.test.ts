@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { EventEmitter } from 'events'
+import type { ChildProcess } from 'child_process'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
@@ -9,6 +11,7 @@ import {
   WLK_DEFAULT_PORT,
   WLK_WS_PATH,
   WlkServer,
+  type SpawnLike,
   type WlkModel
 } from '../src/main/stt/wlk-server'
 
@@ -219,5 +222,186 @@ describe('wlkBinPath platform branch (audit plan step 14)', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+/**
+ * Minimal ChildProcess-shaped fake (audit plan step 13). WlkServer.spawnOnce
+ * wires stdout/stderr/error/exit listeners and calls kill() on teardown --
+ * that is the whole surface it touches. 'exit' fires ASYNCHRONOUSLY via
+ * setImmediate, exactly like a real child-process event (the exit handler
+ * reads fields assigned right after spawn() returns, so a synchronous emit
+ * would be unrealistic).
+ */
+class FakeChild extends EventEmitter {
+  exitCode: number | null = null
+  exited = false
+  killed = false
+  readonly pid: number
+  readonly stdout = new EventEmitter()
+  readonly stderr = new EventEmitter()
+  constructor(pid: number) {
+    super()
+    this.pid = pid
+  }
+  kill(): boolean {
+    this.killed = true
+    return true
+  }
+  /** Simulate an asynchronous crash. */
+  crash(code = 1): void {
+    setImmediate(() => {
+      this.exitCode = code
+      this.exited = true
+      this.emit('exit', code)
+    })
+  }
+}
+
+/** Poll until cond() holds or the timeout elapses (tiny real timers). */
+async function until(cond: () => boolean, what: string, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error(`until: timed out waiting for ${what}`)
+    await new Promise((r) => setTimeout(r, 5))
+  }
+}
+
+/** Grace period long enough for a mis-scheduled respawn to have fired. */
+const graceWait = (): Promise<void> => new Promise((r) => setTimeout(r, 60))
+
+describe('WlkServer crash restart (audit plan step 13)', () => {
+  /**
+   * Seams under test (step 13), all injected -- no real process, no socket:
+   * - spawnImpl: FakeChild instances; tests trigger crashes with .crash().
+   * - probeImpl: resolves only if the LATEST child survived one macrotask,
+   *   mirroring the real readiness poll's contract (a dead child is never
+   *   ready; its rejection drives the retry chain instead).
+   *
+   * Behaviors:
+   * - exit triggers restart: an unexpected exit of a READY server respawns;
+   *   a stable respawn resets the attempt budget.
+   * - repeated failure gives up and reports: respawns dying during startup
+   *   exhaust maxRestartAttempts -> onGaveUp fires ONCE, spawning stops.
+   * - shutdown() cancels a pending respawn (deliberate stop never restarts).
+   * - a failed INITIAL start keeps the step-12 contract: rejects once, no
+   *   auto-restart loop behind the caller's back.
+   */
+
+  function makeServer(
+    spawned: FakeChild[],
+    opts: { maxRestartAttempts?: number; bootCrashAfterFirst?: boolean } = {}
+  ): WlkServer {
+    let pid = 1000
+    let firstSpawnSeen = false
+    return new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      maxRestartAttempts: opts.maxRestartAttempts ?? 2,
+      // Tiny backoff so whole chains run in milliseconds.
+      restartBaseDelayMs: 5,
+      probeImpl: (): Promise<void> =>
+        new Promise((resolveProbe, rejectProbe) => {
+          // One macrotask AFTER the fake's setImmediate crash: mirrors the
+          // real poll noticing a dead process instead of a live socket.
+          setTimeout(() => {
+            const latest = spawned[spawned.length - 1]
+            if (!latest || latest.exited) {
+              rejectProbe(new Error('probe: process died before /asr was ready'))
+            } else {
+              resolveProbe()
+            }
+          }, 3)
+        }),
+      spawnImpl: (() => {
+        const c = new FakeChild(++pid)
+        spawned.push(c)
+        if (opts.bootCrashAfterFirst && firstSpawnSeen) {
+          c.crash() // every RESPAWN dies during startup
+        }
+        firstSpawnSeen = true
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+  }
+
+  it('an unexpected exit of a ready server triggers one bounded-backoff respawn', async () => {
+    const spawned: FakeChild[] = []
+    const server = makeServer(spawned)
+    const gaveUp: Error[] = []
+    server.onGaveUp((err) => gaveUp.push(err))
+
+    await server.start()
+    expect(spawned).toHaveLength(1)
+
+    spawned[0].crash() // mid-serving crash
+    await until(() => spawned.length === 2 && !spawned[1].exited, 'first respawn')
+    expect(gaveUp).toHaveLength(0)
+
+    // A second crash episode gets a FULL budget again (stability resets it):
+    spawned[1].crash()
+    await until(() => spawned.length === 3 && !spawned[2].exited, 'second respawn')
+    expect(gaveUp).toHaveLength(0)
+  })
+
+  it('repeated startup failure exhausts the budget and reports give-up once', async () => {
+    const spawned: FakeChild[] = []
+    const server = makeServer(spawned, { maxRestartAttempts: 2, bootCrashAfterFirst: true })
+    const gaveUp: Error[] = []
+    server.onGaveUp((err) => gaveUp.push(err))
+
+    await server.start()
+    expect(spawned).toHaveLength(1) // initial spawn was healthy
+
+    spawned[0].crash() // ready server dies mid-meeting -> recovery chain
+    await until(() => gaveUp.length === 1, 'give-up report')
+
+    expect(gaveUp[0].message).toMatch(/gave up after 2 restart attempt/)
+    // Exactly 1 initial spawn + maxRestartAttempts respawn attempts, no more.
+    expect(spawned).toHaveLength(3)
+    expect(spawned[1].exited).toBe(true)
+    expect(spawned[2].exited).toBe(true)
+    await graceWait()
+    expect(spawned).toHaveLength(3)
+    expect(gaveUp).toHaveLength(1)
+  })
+
+  it('shutdown() cancels a pending restart (deliberate stop never respawns)', async () => {
+    const spawned: FakeChild[] = []
+    const server = makeServer(spawned)
+    const gaveUp: Error[] = []
+    server.onGaveUp((err) => gaveUp.push(err))
+    await server.start()
+
+    spawned[0].crash() // arms the backoff timer
+    await server.shutdown() // deliberate stop inside the window
+    await graceWait()
+    expect(spawned).toHaveLength(1)
+    expect(gaveUp).toHaveLength(0)
+  })
+
+  it('a failed INITIAL start rejects and never arms a restart (step-12 contract)', async () => {
+    const children: FakeChild[] = []
+    // Every child (including the very first) dies during startup.
+    const alwaysCrashing = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      maxRestartAttempts: 3,
+      restartBaseDelayMs: 5,
+      probeImpl: (): Promise<void> =>
+        new Promise((_, rejectProbe) =>
+          setTimeout(() => rejectProbe(new Error('probe: died before ready')), 3)
+        ),
+      spawnImpl: (() => {
+        const c = new FakeChild(9000 + children.length)
+        children.push(c)
+        c.crash()
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+
+    // The injected probe mirrors the real poll's contract: the child died
+    // during startup -> start() rejects ONCE with that reason.
+    await expect(alwaysCrashing.start()).rejects.toThrow(/died before ready/)
+    await graceWait()
+    expect(children).toHaveLength(1)
   })
 })

@@ -57,54 +57,82 @@ import { WLK_DEFAULT_HOST, WLK_DEFAULT_PORT, WLK_WS_PATH } from './wlk-server'
  * Injectable WebSocket seam (plan step 16): {connect(url), send(data),
  * onMessage(cb), close()}. The adapter never touches a real socket directly --
  * tests inject a FakeWsTransport that replays the step-14 fixture.
+ *
+ * Audit step 13: the optional onError channel reports MID-SESSION transport
+ * failures -- a connection that was established and then dropped whose bounded
+ * reconnect budget ran out. Startup failures stay on connect()'s rejection
+ * path (the step-12 contract); they never reach onError. Fake transports may
+ * simply omit the channel (it is optional).
  */
 export interface WsTransport {
   connect(url: string): Promise<void>
   send(data: Uint8Array): void
   onMessage(cb: (data: string) => void): void
   close(): Promise<void>
+  /** Optional: terminal mid-session failure after reconnect attempts exhaust. */
+  onError?(cb: (err: Error) => void): void
 }
+
+export interface NodeWsTransportOptions {
+  /** Injectable socket factory (unit tests); defaults to the global WebSocket. */
+  wsFactory?: (url: string) => WebSocket
+  /**
+   * Audit step 13: max redial attempts after an ESTABLISHED connection drops
+   * unexpectedly (default 5). Exhausting the budget is terminal and fires the
+   * transport's onError channel once; deliberate close() never redials.
+   */
+  maxReconnectAttempts?: number
+  /** Base delay of the reconnect backoff -- delay = base * 2^attempt, capped at 8s (default 500ms). */
+  reconnectBaseDelayMs?: number
+}
+
+/** Ceiling for one backoff wait so a long outage cannot sleep unbounded. */
+const MAX_RECONNECT_DELAY_MS = 8000
 
 /**
  * Real transport over the runtime's global WebSocket (see header for the
- * no-dependency decision). Errors: a failed connect rejects connect(); the
- * transport has no runtime error channel (the plan's WsTransport shape), so
- * the adapter's onError is registered for interface compliance only.
+ * no-dependency decision). Errors:
+ * - a failed INITIAL connect rejects connect() (startup failure; step-12 path);
+ * - a drop AFTER an established connection triggers bounded exponential-backoff
+ *   redials on the SAME url (audit step 13): message callbacks persist across
+ *   redials, no incoming message is ever replayed, so the transcript already
+ *   committed downstream is neither duplicated nor reset -- the adapter's seq
+ *   counter simply continues from where it was;
+ * - exhausting the reconnect budget fires onError once (terminal).
+ *
+ * Budget rationale: defaults give ~15.5s of socket-side retries
+ * (500+1000+2000+4000+8000ms), comfortably longer than WlkServer's own crash
+ * restart chain (~7s of backoff plus probe time), so a respawned wlk process
+ * normally wins the race and sockets recover silently.
  */
 export class NodeWsTransport implements WsTransport {
+  private readonly wsFactory: ((url: string) => WebSocket) | null
+  private readonly maxReconnectAttempts: number
+  private readonly reconnectBaseDelayMs: number
   private ws: WebSocket | null = null
   private messageCb: ((data: string) => void) | null = null
+  private errorCb: ((err: Error) => void) | null = null
+  private url: string | null = null
+  private closedByCaller = false
+  private reconnectAttempts = 0
+  private reconnectTimer: NodeJS.Timeout | null = null
+
+  constructor(opts: NodeWsTransportOptions = {}) {
+    this.wsFactory = opts.wsFactory ?? null
+    this.maxReconnectAttempts = opts.maxReconnectAttempts ?? 5
+    this.reconnectBaseDelayMs = opts.reconnectBaseDelayMs ?? 500
+  }
 
   connect(url: string): Promise<void> {
-    if (typeof WebSocket === 'undefined') {
+    if (typeof WebSocket === 'undefined' && !this.wsFactory) {
       return Promise.reject(
         new Error('whisper-livekit: global WebSocket unavailable (needs Node >= 22)')
       )
     }
-    return new Promise((resolve, reject) => {
-      let ws: WebSocket
-      try {
-        ws = new WebSocket(url)
-      } catch (err) {
-        reject(err)
-        return
-      }
-      this.ws = ws
-      let opened = false
-      ws.onopen = (): void => {
-        opened = true
-        resolve()
-      }
-      ws.onerror = (): void => {
-        if (!opened) reject(new Error(`whisper-livekit: WS error connecting to ${url}`))
-      }
-      ws.onclose = (): void => {
-        if (this.ws === ws) this.ws = null
-      }
-      ws.onmessage = (ev): void => {
-        this.messageCb?.(String(ev.data))
-      }
-    })
+    this.closedByCaller = false
+    this.url = url
+    this.reconnectAttempts = 0
+    return this.dial(url)
   }
 
   send(data: Uint8Array): void {
@@ -115,10 +143,101 @@ export class NodeWsTransport implements WsTransport {
     this.messageCb = cb
   }
 
+  /** Terminal mid-session failure channel (audit step 13). */
+  onError(cb: (err: Error) => void): void {
+    this.errorCb = cb
+  }
+
   close(): Promise<void> {
+    // Deliberate stop: cancel any pending redial FIRST so the closing
+    // socket's late onclose cannot arm one behind us.
+    this.closedByCaller = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.ws?.close()
     this.ws = null
     return Promise.resolve()
+  }
+
+  /** One dial cycle: resolve on open, reject pre-open failures. Never retries. */
+  private dial(url: string): Promise<void> {
+    return new Promise<void>((resolveDial, rejectDial) => {
+      let ws: WebSocket
+      try {
+        ws = this.wsFactory ? this.wsFactory(url) : new WebSocket(url)
+      } catch (err) {
+        rejectDial(err instanceof Error ? err : new Error(String(err)))
+        return
+      }
+      this.ws = ws
+      let opened = false
+      let settled = false
+      ws.onopen = (): void => {
+        opened = true
+        settled = true
+        resolveDial()
+      }
+      ws.onerror = (): void => {
+        if (!opened && !settled) {
+          settled = true
+          rejectDial(new Error(`whisper-livekit: WS error connecting to ${url}`))
+        }
+      }
+      ws.onclose = (): void => {
+        if (this.ws === ws) this.ws = null
+        if (settled && opened) {
+          // Established connection dropped mid-session (audit step 13).
+          if (!this.closedByCaller) this.scheduleReconnect()
+          return
+        }
+        if (!settled) {
+          settled = true
+          rejectDial(new Error(`whisper-livekit: WS error connecting to ${url}`))
+        }
+      }
+      ws.onmessage = (ev): void => {
+        this.messageCb?.(String(ev.data))
+      }
+    })
+  }
+
+  /**
+   * Arm one bounded-backoff redial (audit step 13). The Nth attempt waits
+   * base*2^(N-1) capped at MAX_RECONNECT_DELAY_MS; a successful redial resets
+   * the budget; exhaustion fires onError ONCE with the terminal reason.
+   */
+  private scheduleReconnect(): void {
+    if (this.closedByCaller || !this.url) return
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      const err = new Error(
+        `whisper-livekit: connection to ${this.url} lost and reconnect gave up after ${this.maxReconnectAttempts} attempt(s)`
+      )
+      console.error('[whisper-livekit]', err.message)
+      this.errorCb?.(err)
+      return
+    }
+    const delay = Math.min(
+      this.reconnectBaseDelayMs * Math.pow(2, this.reconnectAttempts),
+      MAX_RECONNECT_DELAY_MS
+    )
+    this.reconnectAttempts += 1
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (this.closedByCaller || !this.url) return
+      void this.dial(this.url).then(
+        () => {
+          this.reconnectAttempts = 0 // stable again: full budget for next drop
+        },
+        () => {
+          // Redial refused: continue the SAME chain here -- dial's pre-open
+          // close/error paths never schedule on their own, so exactly one
+          // scheduling decision exists per attempt.
+          this.scheduleReconnect()
+        }
+      )
+    }, delay)
   }
 }
 
@@ -168,6 +287,12 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
     this.source = opts.source ?? 'mic'
     this.model = opts.model ?? 'tiny'
     this.transport.onMessage((data) => this.handleMessage(data))
+    // Audit step 13: a real transport can now fail TERMINALLY mid-session
+    // (bounded reconnect budget exhausted). Route it into the adapter's single
+    // onError slot -- CaptureSession registered that slot at start(), so the
+    // failure lands on the step-12 path (session 'error' + status chip). Fake
+    // transports without the channel are unaffected (optional method).
+    this.transport.onError?.((err) => this.errorCb?.(err))
   }
 
   async connect(): Promise<void> {

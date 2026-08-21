@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { WhisperLiveKitSttAdapter, type WsTransport } from '../src/main/stt/whisper-livekit'
+﻿import { describe, expect, it } from 'vitest'
+import {
+  NodeWsTransport,
+  WhisperLiveKitSttAdapter,
+  type WsTransport
+} from '../src/main/stt/whisper-livekit'
 import { createSttAdapter } from '../src/shared/stt/stt-adapter'
 import rawFixture from './fixtures/wlk-messages.json'
 
@@ -219,5 +223,293 @@ describe('dual-track (plan step 19): two adapter instances = two independent wlk
     const mic = createSttAdapter('local-whisperlivekit')
     const loopback = createSttAdapter('local-whisperlivekit')
     expect(mic).not.toBe(loopback)
+  })
+})
+
+
+/**
+ * Minimal socket fake for the REAL NodeWsTransport (audit plan step 13): the
+ * transport is constructed with a wsFactory that returns these, so the
+ * reconnect machinery itself is what runs -- no global WebSocket is touched.
+ * Sockets NEVER open on their own: each test opens or refuses a dial
+ * explicitly, which makes every reconnect chain deterministic.
+ */
+class FakeSocket {
+  readonly sent: Uint8Array[] = []
+  closeCalled = false
+  onopen: (() => void) | null = null
+  onerror: (() => void) | null = null
+  onclose: (() => void) | null = null
+  onmessage: ((ev: { data: unknown }) => void) | null = null
+
+  send(data: Uint8Array): void {
+    this.sent.push(data)
+  }
+  close(): void {
+    this.closeCalled = true
+    this.onclose?.()
+  }
+  /** Dial succeeded (post-open lifecycle begins). */
+  open(): void {
+    this.onopen?.()
+  }
+  /** Unexpected close AFTER an established connection (the step-13 trigger). */
+  drop(): void {
+    this.onclose?.()
+  }
+  /** Failed dial pre-open: error then close, in undici's order. */
+  refuse(): void {
+    this.onerror?.()
+    this.onclose?.()
+  }
+  message(data: string): void {
+    this.onmessage?.({ data })
+  }
+}
+
+function makeFactory(sockets: FakeSocket[], urls: string[]): (url: string) => WebSocket {
+  return (url: string): WebSocket => {
+    urls.push(url)
+    const s = new FakeSocket()
+    sockets.push(s)
+    return s as unknown as WebSocket
+  }
+}
+
+async function until(cond: () => boolean, what: string, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error(`until: timed out waiting for ${what}`)
+    await new Promise((r) => setTimeout(r, 5))
+  }
+}
+
+const graceWait = (): Promise<void> => new Promise((r) => setTimeout(r, 40))
+
+describe('NodeWsTransport reconnect (audit plan step 13)', () => {
+  /**
+   * Seams under test:
+   * - an unexpected close AFTER an established connection redials the SAME url
+   *   with bounded backoff; send()/onMessage reroute to the new socket.
+   * - exhausting maxReconnectAttempts fires onError ONCE (terminal).
+   * - deliberate close() never redials (also suppresses late close events).
+   * - a failed INITIAL connect keeps rejecting connect() and does NOT enter
+   *   the reconnect loop (step-12 startup contract).
+   */
+
+  it('redials the same url after an established connection drops unexpectedly', async () => {
+    const sockets: FakeSocket[] = []
+    const urls: string[] = []
+    const received: string[] = []
+    const t = new NodeWsTransport({
+      wsFactory: makeFactory(sockets, urls),
+      maxReconnectAttempts: 2,
+      reconnectBaseDelayMs: 5
+    })
+    t.onMessage((d) => received.push(d))
+
+    const connecting = t.connect('ws://127.0.0.1:9999/asr')
+    await until(() => sockets.length === 1, 'initial dial')
+    sockets[0].open()
+    await connecting
+
+    t.send(new Uint8Array([1]))
+    expect(sockets[0].sent).toHaveLength(1)
+
+    sockets[0].drop() // mid-session drop
+    await until(() => sockets.length === 2 && urls.length === 2, 'redial')
+    sockets[1].open()
+    // Same endpoint, new socket; send routes there now.
+    expect(urls[1]).toBe('ws://127.0.0.1:9999/asr')
+    t.send(new Uint8Array([2]))
+    expect(sockets[1].sent).toHaveLength(1)
+    // The message callback survived the redial untouched.
+    sockets[1].message('after-reconnect')
+    expect(received).toEqual(['after-reconnect'])
+    await t.close()
+  })
+
+  it('exhausting the reconnect budget fires onError once, then stops dialing', async () => {
+    const sockets: FakeSocket[] = []
+    const urls: string[] = []
+    const errors: Error[] = []
+    const t = new NodeWsTransport({
+      wsFactory: makeFactory(sockets, urls),
+      maxReconnectAttempts: 2,
+      reconnectBaseDelayMs: 5
+    })
+    t.onError((err) => errors.push(err))
+
+    const connecting = t.connect('ws://127.0.0.1:9999/asr')
+    await until(() => sockets.length === 1, 'initial dial')
+    sockets[0].open()
+    await connecting
+
+    sockets[0].drop()
+    // Each redial appears, then refuses -- repeated failure.
+    await until(() => sockets.length === 2, 'redial attempt 1')
+    sockets[1].refuse()
+    await until(() => sockets.length === 3, 'redial attempt 2')
+    sockets[2].refuse()
+    await until(() => errors.length === 1, 'terminal error')
+
+    expect(errors[0].message).toMatch(/gave up after 2 attempt/)
+    await graceWait()
+    expect(sockets).toHaveLength(3) // no further dials
+    expect(errors).toHaveLength(1) // reported exactly once
+  })
+
+  it('close() is deliberate: no redial even from late close events', async () => {
+    const sockets: FakeSocket[] = []
+    const urls: string[] = []
+    const errors: Error[] = []
+    const t = new NodeWsTransport({
+      wsFactory: makeFactory(sockets, urls),
+      maxReconnectAttempts: 2,
+      reconnectBaseDelayMs: 5
+    })
+    t.onError((err) => errors.push(err))
+
+    const connecting = t.connect('ws://127.0.0.1:9999/asr')
+    await until(() => sockets.length === 1, 'initial dial')
+    sockets[0].open()
+    await connecting
+
+    await t.close()
+    expect(sockets[0].closeCalled).toBe(true)
+    sockets[0].drop() // late close of the already-closed socket
+    await graceWait()
+    expect(sockets).toHaveLength(1)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('a failed INITIAL connect rejects without entering the reconnect loop', async () => {
+    const sockets: FakeSocket[] = []
+    const urls: string[] = []
+    const errors: Error[] = []
+    const t = new NodeWsTransport({
+      wsFactory: makeFactory(sockets, urls),
+      maxReconnectAttempts: 3,
+      reconnectBaseDelayMs: 5
+    })
+    t.onError((err) => errors.push(err))
+
+    const connecting = t.connect('ws://127.0.0.1:9999/asr')
+    await until(() => sockets.length === 1, 'initial dial')
+    sockets[0].refuse()
+    await expect(connecting).rejects.toThrow(/WS error connecting/)
+    await graceWait()
+    expect(sockets).toHaveLength(1)
+    expect(errors).toHaveLength(0)
+  })
+})
+
+describe('reconnect preserves committed transcript segments (audit plan step 13)', () => {
+  /**
+   * The duplication hazard, concretely: index.ts builds segmentId as
+   * `${kind}:${source}:${seq}`. If a reconnect reset the adapter's seq to 0,
+   * post-reconnect finals would REUSE committed segmentIds and the step-9
+   * reducer would REPLACE old lines with new audio's text (silent data loss).
+   * This drives the REAL NodeWsTransport over fake sockets through the REAL
+   * adapter with the REAL fixture and proves:
+   * - committed finals before the drop are NOT re-emitted after reconnect;
+   * - the seq counter continues monotonically across the reconnect boundary;
+   * - post-reconnect finals carry fresh wlk segmentIds (new start timestamp).
+   */
+  const CONTINUATION_PARTIAL = JSON.stringify({
+    status: 'active_transcription',
+    lines: [],
+    buffer_transcription: ' recovered after the drop',
+    buffer_diarization: '',
+    buffer_translation: ''
+  })
+  const CONTINUATION_FINAL = JSON.stringify({
+    status: 'active_transcription',
+    lines: [
+      {
+        speaker: 2,
+        text: ' recovered after the drop',
+        start: '0:00:07.10',
+        end: '0:00:08.20',
+        detected_language: 'en'
+      }
+    ],
+    buffer_transcription: '',
+    buffer_diarization: '',
+    buffer_translation: ''
+  })
+
+  it('seq continues and committed segments are not replayed after reconnect', async () => {
+    const sockets: FakeSocket[] = []
+    const urls: string[] = []
+    const transport = new NodeWsTransport({
+      wsFactory: makeFactory(sockets, urls),
+      maxReconnectAttempts: 2,
+      reconnectBaseDelayMs: 5
+    })
+    const adapter = new WhisperLiveKitSttAdapter({ transport })
+    const events: Array<{ kind: string; text: string; seq: number }> = []
+    adapter.onPartial((text, seq) => events.push({ kind: 'partial', text, seq }))
+    adapter.onFinal((text, seq) => events.push({ kind: 'final', text, seq }))
+
+    const connecting = adapter.connect()
+    await until(() => sockets.length === 1, 'initial dial')
+    sockets[0].open()
+    await connecting
+
+    // Real fixture: two partials (segment 0 revisions) + first final commits it.
+    sockets[0].message(fixture[9])
+    sockets[0].message(fixture[10])
+    sockets[0].message(fixture[11])
+    expect(events.map((e) => [e.kind, e.seq])).toEqual([
+      ['partial', 0],
+      ['partial', 0],
+      ['final', 0]
+    ])
+
+    sockets[0].drop() // wlk died; transport reconnects underneath the adapter
+    await until(() => sockets.length === 2, 'transport redial')
+    sockets[1].open()
+
+    // Fresh wlk session: continuation partial + final on the NEW socket.
+    sockets[1].message(CONTINUATION_PARTIAL)
+    sockets[1].message(CONTINUATION_FINAL)
+
+    expect(events).toEqual([
+      { kind: 'partial', text: 'Testing 1', seq: 0 },
+      { kind: 'partial', text: 'Testing 1, 2, 3', seq: 0 },
+      { kind: 'final', text: 'testing 1, 2, 3. This is the Vero meeting transcription', seq: 0 },
+      { kind: 'partial', text: 'recovered after the drop', seq: 1 },
+      { kind: 'final', text: 'recovered after the drop', seq: 1 }
+    ])
+    // No committed segment was emitted twice: every (kind,text,seq) unique.
+    const keys = events.map((e) => `${e.kind}:${e.text}:${e.seq}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    await adapter.close()
+  })
+
+  it('adapter-level onError surfaces terminal reconnect failure to the session seam', async () => {
+    const sockets: FakeSocket[] = []
+    const urls: string[] = []
+    const transport = new NodeWsTransport({
+      wsFactory: makeFactory(sockets, urls),
+      maxReconnectAttempts: 1,
+      reconnectBaseDelayMs: 5
+    })
+    const adapter = new WhisperLiveKitSttAdapter({ transport })
+    const errors: Error[] = []
+    adapter.onError((err) => errors.push(err))
+
+    const connecting = adapter.connect()
+    await until(() => sockets.length === 1, 'initial dial')
+    sockets[0].open()
+    await connecting
+
+    sockets[0].drop()
+    await until(() => sockets.length === 2, 'redial')
+    sockets[1].refuse()
+
+    await until(() => errors.length === 1, 'adapter error')
+    expect(errors[0].message).toMatch(/gave up after 1 attempt/)
   })
 })

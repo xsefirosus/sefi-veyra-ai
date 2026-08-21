@@ -243,7 +243,7 @@ have to break it.
   at a nonexistent path) and confirm the UI reports it rather than hanging in
   `starting`. Commit.
 
-- [ ] 13. **Add wlk crash/disconnect recovery.** (needs: 12) Nothing restarts the server or
+- [x] 13. **Add wlk crash/disconnect recovery.** (needs: 12) Nothing restarts the server or
   reconnects the socket today: `WlkServer.start()` polls once at boot, the
   `child.on('exit')` handler only nulls the reference (`wlk-server.ts:185-189`),
   and `NodeWsTransport` has no reconnect (`whisper-livekit.ts:101`) — a mid-meeting

@@ -26,6 +26,12 @@ export type CaptureSessionState = 'idle' | 'starting' | 'listening' | 'stopping'
 export interface CaptureServer {
   start(): Promise<void>
   shutdown(): Promise<void>
+  /**
+   * Audit step 13: fires ONCE when the server's bounded restart budget is
+   * exhausted (crash recovery gave up). Optional so legacy fakes satisfy the
+   * type; the real WlkServer implements it via onGaveUp().
+   */
+  onGiveUp?(cb: (err: Error) => void): void
 }
 
 export interface CaptureAdapter {
@@ -181,6 +187,12 @@ export class CaptureSession {
     try {
       server = this.createServer(model)
       this.server = server
+      // Audit step 13: restart-budget exhaustion is a terminal server failure.
+      // Route it into fail() so it lands on the step-12 path (state 'error' +
+      // lastError -> session-state broadcast -> status chip). While recovery
+      // is still in flight the session stays 'listening'; only the terminal
+      // give-up fails the session.
+      server.onGiveUp?.((err) => this.fail(err))
       await server.start()
 
       if (this.useLegacy) {

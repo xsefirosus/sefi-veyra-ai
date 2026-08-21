@@ -356,3 +356,96 @@ describe('CaptureSession error surfacing (audit plan step 12)', () => {
     expect(session.lastError).toBeNull()
   })
 })
+
+describe('CaptureSession server give-up wiring (audit plan step 13)', () => {
+  /**
+   * Seams under test:
+   * - CaptureServer.onGiveUp (optional, audit step 13): the session registers
+   *   a handler at start(), so a wlk restart budget exhausted MID-MEETING is
+   *   routed into fail() -- state 'error' + lastError + the step-12 broadcast
+   *   -- instead of vanishing into a console log.
+   * - The guard semantics are fail()'s own (step 12): exhaustion outside
+   *   `listening` (e.g. a late report after a clean stop) must not resurrect
+   *   an error chip over `idle`.
+   */
+
+  /** Wraps fakeServer with an onGiveUp registration slot. */
+  function fakeServerWithGiveUp(
+    base = fakeServer()
+  ): CaptureServer & { emitGiveUp(err: Error): void } {
+    let cb: ((err: Error) => void) | null = null
+    return {
+      start: () => base.start(),
+      shutdown: () => base.shutdown(),
+      onGiveUp: (registered) => {
+        cb = registered
+      },
+      emitGiveUp: (err) => {
+        if (!cb) throw new Error('fakeServerWithGiveUp: no onGiveUp registered')
+        cb(err)
+      }
+    }
+  }
+
+  it('server give-up while listening lands in error with lastError and emits', async () => {
+    const server = fakeServerWithGiveUp()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createAdapter: () => fakeAdapter()
+    })
+    await session.start({ sttModel: 'tiny' })
+    expect(session.state).toBe('listening')
+
+    const seen: Array<{ state: string; lastError: string | null }> = []
+    session.onStateChange((state, lastError) =>
+      seen.push({ state, lastError: lastError?.message ?? null })
+    )
+
+    server.emitGiveUp(new Error('wlk crashed and gave up after 3 restart attempt(s)'))
+
+    expect(session.state).toBe('error')
+    expect(session.lastError?.message).toContain('gave up after 3 restart attempt')
+    // The broadcast seam: main re-emits exactly this on 'session-state'.
+    expect(seen).toEqual([
+      { state: 'error', lastError: expect.stringContaining('gave up after 3') }
+    ])
+  })
+
+  it('a give-up reported after a clean stop does not resurrect the error chip', async () => {
+    const server = fakeServerWithGiveUp()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createAdapter: () => fakeAdapter()
+    })
+    await session.start({ sttModel: 'tiny' })
+    await session.stop()
+
+    server.emitGiveUp(new Error('late exhaustion'))
+
+    expect(session.state).toBe('idle')
+    expect(session.lastError).toBeNull()
+  })
+
+  it('give-up during recovery keeps the session listening until exhaustion', async () => {
+    // While WlkServer is still within its restart budget it emits NOTHING --
+    // the session stays 'listening'. Only the terminal report fails it.
+    const server = fakeServerWithGiveUp()
+    const mic = fakeAdapter()
+    const loopback = fakeAdapter()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createMicAdapter: () => mic,
+      createLoopbackAdapter: () => loopback
+    })
+    await session.start({ sttModel: 'tiny' })
+
+    const states: string[] = []
+    session.onStateChange((state) => states.push(state))
+    // No emission == no crash episode surfaced yet; assert by NOT emitting.
+    expect(states).toEqual([])
+
+    server.emitGiveUp(new Error('exhausted'))
+    expect(session.state).toBe('error')
+    expect(states).toEqual(['error'])
+  })
+})
