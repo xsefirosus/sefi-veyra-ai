@@ -254,7 +254,7 @@ have to break it.
   gives up and reports; reconnect does not duplicate committed segments.
   Verify: `npm test`. Commit.
 
-- [ ] 14. **Portable setup scripts + cross-platform capture path.** (needs: 1) All four
+- [x] 14. **Portable setup scripts + cross-platform capture path.** (needs: 1) All four
   scripts are PowerShell-only (`setup-wlk.ps1`, `synth-speech.ps1`,
   `check-loopback.ps1`, and `probe-wlk.mjs`'s documented invocation), so a
   macOS or Linux contributor cannot install wlk or run any verification; the
