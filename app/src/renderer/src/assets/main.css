@@ -207,3 +207,87 @@ body {
   font-style: italic;
   color: var(--ev-c-text-3);
 }
+
+.overlay-empty--error {
+  color: #f87171;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Step 5: session controls (header bar shared by main) + status chip */
+.session-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 26rem;
+  margin: 1rem auto 0;
+  padding: 0.75rem 0;
+  flex-wrap: wrap;
+}
+
+.session-button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.03em;
+  padding: 0.625rem 1rem;
+  min-height: 2.5rem;
+  color: var(--ev-c-black);
+  background-color: var(--ev-c-text-1);
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition:
+    background-color 200ms,
+    opacity 200ms;
+}
+
+.session-button:hover:not(:disabled) {
+  background-color: var(--ev-c-white);
+}
+
+.session-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.session-button:focus-visible {
+  outline: 2px solid var(--ev-c-text-1);
+  outline-offset: 2px;
+}
+
+.session-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  border: 1px solid var(--ev-c-gray-3);
+  background-color: var(--color-background-mute);
+  color: var(--ev-c-text-2);
+}
+
+.session-chip--listening {
+  color: #4ade80;
+  border-color: #4ade80;
+}
+
+.session-chip--starting {
+  color: #facc15;
+  border-color: #facc15;
+}
+
+.session-chip--error {
+  color: #f87171;
+  border-color: #f87171;
+}
+
+.session-error {
+  font-size: 0.8125rem;
+  color: #f87171;
+  width: 100%;
+}

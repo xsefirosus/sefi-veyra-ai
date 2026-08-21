@@ -5,10 +5,12 @@
  */
 import TranscriptPanel from './TranscriptPanel'
 import { useTranscript } from './use-transcript'
+import { useSessionState } from '../session/use-session-state'
 
 function OverlayScreen(): React.JSX.Element {
   const { lines } = useTranscript()
-  return <TranscriptPanel lines={lines} variant="overlay" />
+  const sessionStatus = useSessionState()
+  return <TranscriptPanel lines={lines} variant="overlay" sessionStatus={sessionStatus} />
 }
 
 export default OverlayScreen

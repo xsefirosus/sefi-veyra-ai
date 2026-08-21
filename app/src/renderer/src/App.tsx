@@ -6,6 +6,8 @@ import TranscriptPanel from './transcript/TranscriptPanel'
 import { useTranscript } from './transcript/use-transcript'
 import { startLoopbackCapture, type LoopbackCaptureHandle } from './capture/loopback-capture'
 import { useCapture } from './capture/use-capture'
+import SessionControls from './session/SessionControls'
+import { useSessionState } from './session/use-session-state'
 
 /**
  * Main window: the VEYRA settings screen (step 7) PLUS the transcript panel
@@ -15,6 +17,7 @@ import { useCapture } from './capture/use-capture'
 function MainScreen(): React.JSX.Element {
   const { lines } = useTranscript()
   const [settings, dispatch] = useReducer(settingsReducer, initialSettings)
+  const sessionStatus = useSessionState()
   // Step 4: react to session-state → listening (start mic with settings.audioDeviceId
   // skipping LOOPBACK_DEVICE_ID, start loopback) and stopping/idle (stop both).
   // Surface onFallback so the UI can show it. No-op when loopbackCheckMode.
@@ -48,8 +51,9 @@ function MainScreen(): React.JSX.Element {
 
   return (
     <div className="main-screen">
+      <SessionControls settings={settings} />
       <SettingsScreen settings={settings} dispatch={dispatch} captureFallback={capture.fallback} />
-      <TranscriptPanel lines={lines} variant="panel" />
+      <TranscriptPanel lines={lines} variant="panel" sessionStatus={sessionStatus} />
     </div>
   )
 }

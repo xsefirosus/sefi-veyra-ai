@@ -12,10 +12,13 @@
  * lines (all of them until plan step 20) show no tag.
  */
 import type { TranscriptLine } from './transcript-reducer'
+import type { SessionStatus } from '../session/session-status'
+import { overlayEmptyLabel } from '../session/session-status'
 
 interface TranscriptPanelProps {
   lines: TranscriptLine[]
   variant: 'panel' | 'overlay'
+  sessionStatus?: SessionStatus
 }
 
 /** How many of the most recent lines the overlay shows (fits 120px). */
@@ -26,13 +29,21 @@ function SpeakerTag({ speaker }: { speaker: TranscriptLine['speaker'] }): React.
   return <span className="transcript-speaker">{speaker}</span>
 }
 
-function TranscriptPanel({ lines, variant }: TranscriptPanelProps): React.JSX.Element {
+function TranscriptPanel({
+  lines,
+  variant,
+  sessionStatus
+}: TranscriptPanelProps): React.JSX.Element {
   if (variant === 'overlay') {
     const tail = lines.slice(-OVERLAY_TAIL)
+    const emptyText = sessionStatus
+      ? overlayEmptyLabel(sessionStatus)
+      : 'Idle \u2014 press Start listening'
+    const isError = sessionStatus?.state === 'error'
     return (
       <div className="overlay-screen" role="status" aria-live="polite">
         {tail.length === 0 ? (
-          <p className="overlay-empty">Listening…</p>
+          <p className={`overlay-empty ${isError ? 'overlay-empty--error' : ''}`}>{emptyText}</p>
         ) : (
           tail.map((l) => (
             <p key={`${l.kind}-${l.seq}`} className={`overlay-line ${l.kind}`}>

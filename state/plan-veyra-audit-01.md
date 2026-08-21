@@ -134,7 +134,7 @@ have to break it.
   (`scriptprocessor`) mode so the UI can show it. Verify: `npm test` passes;
   `npm run build` passes. Commit.
 
-- [ ] 5. **Add the Start/Stop control and status indicator (UI).** (needs: 4) There is no
+- [x] 5. **Add the Start/Stop control and status indicator (UI).** (needs: 4) There is no
   way to begin a session in the app today. In `SettingsScreen` (or a new header
   bar shared by both windows) add a primary Start/Stop listening button bound to
   `session:start`/`session:stop`, plus a status chip driven by `session-state`:
