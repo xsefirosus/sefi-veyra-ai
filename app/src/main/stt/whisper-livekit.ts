@@ -220,13 +220,14 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
 
   private handleMessage(data: string): void {
     if (this.closed) return
-    const event = normalizeWlkMessage(data, this.source, this.seq)
-    if (event === null) return
-    if (event.kind === 'final') {
-      this.finalCb?.(event.text, event.seq)
-      this.seq += 1 // segment committed; the next event opens the next segment
-    } else {
-      this.partialCb?.(event.text, event.seq)
+    const events = normalizeWlkMessage(data, this.source, this.seq)
+    for (const event of events) {
+      if (event.kind === 'final') {
+        this.finalCb?.(event.text, event.seq)
+        this.seq += 1 // segment committed; the next event opens the next segment
+      } else {
+        this.partialCb?.(event.text, event.seq)
+      }
     }
   }
 }

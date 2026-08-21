@@ -166,7 +166,7 @@ have to break it.
   change in the same artifact. Never assume the answer — write what was measured.
   Commit script + artifact.
 
-- [ ] 8. **Fix duplicate and lost final segments (the biggest correctness bug).** (needs: 1)
+- [x] 8. **Fix duplicate and lost final segments (the biggest correctness bug).** (needs: 1)
   `normalizeWlkMessage` (`src/shared/stt/context-parser.ts`) emits a `final`
   from `lastNonEmptyLineText(parsed.lines)` on **every** status message whose
   last line has text. wlk's `lines[]` is cumulative AND revised in place —

@@ -30,7 +30,14 @@ describe('llm-adapter contract', () => {
 
   it('streamSuggestions yields a Suggestion for a TranscriptContext', async () => {
     const events: TranscriptEvent[] = [
-      { source: 'mic', kind: 'final', text: 'testing one two three', seq: 0, ts: 1 }
+      {
+        source: 'mic',
+        kind: 'final',
+        text: 'testing one two three',
+        seq: 0,
+        ts: 1,
+        segmentId: '0:00:00.00:0'
+      }
     ]
     const mock = new MockLlmAdapter([{ text: 'send the agenda', kind: 'action-item' }])
     const out: Suggestion[] = []

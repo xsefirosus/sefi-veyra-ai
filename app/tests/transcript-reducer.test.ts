@@ -82,10 +82,24 @@ describe('transcript-reducer (plan step 18)', () => {
 
   it('toTranscriptAction maps a TranscriptEvent to a reducer action', () => {
     expect(
-      toTranscriptAction({ source: 'mic', kind: 'partial', text: 'hi', seq: 0, ts: 1 })
+      toTranscriptAction({
+        source: 'mic',
+        kind: 'partial',
+        text: 'hi',
+        seq: 0,
+        ts: 1,
+        segmentId: 'partial:mic:0'
+      })
     ).toEqual({ type: 'partial', seq: 0, text: 'hi' })
     expect(
-      toTranscriptAction({ source: 'loopback', kind: 'final', text: 'done', seq: 1, ts: 2 })
+      toTranscriptAction({
+        source: 'loopback',
+        kind: 'final',
+        text: 'done',
+        seq: 1,
+        ts: 2,
+        segmentId: '0:00:01.00:0'
+      })
     ).toEqual({ type: 'final', seq: 1, text: 'done' })
   })
 
@@ -97,7 +111,8 @@ describe('transcript-reducer (plan step 18)', () => {
         text: 'hi',
         seq: 0,
         ts: 1,
-        speaker: 'me'
+        speaker: 'me',
+        segmentId: 'partial:mic:0'
       })
     ).toEqual({ type: 'partial', seq: 0, text: 'hi', speaker: 'me' })
     expect(
@@ -107,7 +122,8 @@ describe('transcript-reducer (plan step 18)', () => {
         text: 'done',
         seq: 1,
         ts: 2,
-        speaker: 'other'
+        speaker: 'other',
+        segmentId: '0:00:01.00:0'
       })
     ).toEqual({ type: 'final', seq: 1, text: 'done', speaker: 'other' })
   })

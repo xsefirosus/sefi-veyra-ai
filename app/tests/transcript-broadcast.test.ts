@@ -10,7 +10,14 @@ import type { TranscriptEvent } from '../src/shared/types'
  * windows (main + overlay), skipping null slots and destroyed windows.
  */
 
-const event: TranscriptEvent = { source: 'mic', kind: 'partial', text: 'hi', seq: 0, ts: 1 }
+const event: TranscriptEvent = {
+  source: 'mic',
+  kind: 'partial',
+  text: 'hi',
+  seq: 0,
+  ts: 1,
+  segmentId: 'partial:mic:0'
+}
 
 function fakeWindow(destroyed = false): BroadcastWindow {
   return {

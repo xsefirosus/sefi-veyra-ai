@@ -15,7 +15,14 @@ import type { TranscriptEvent } from '../src/shared/types'
  * without mocking; the preload index.ts binds them to the real ipcRenderer.
  */
 
-const event: TranscriptEvent = { source: 'mic', kind: 'final', text: 'done', seq: 0, ts: 1 }
+const event: TranscriptEvent = {
+  source: 'mic',
+  kind: 'final',
+  text: 'done',
+  seq: 0,
+  ts: 1,
+  segmentId: '0:00:00.00:0'
+}
 
 function fakeIpc(): IpcSubscribe & {
   on: ReturnType<typeof vi.fn>

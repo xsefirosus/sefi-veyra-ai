@@ -1,10 +1,10 @@
 /**
- * Shared transcript event type (plan steps 10 and 15).
+ * Shared transcript event type (plan steps 10, 15 and 8 — audit remediation).
  *
  * Declared once here so both the LLM adapter seam (step 10,
  * src/shared/llm/llm-adapter.ts) and the STT context parser (step 15,
  * src/shared/stt/context-parser.ts) import the same shape:
- * `normalizeWlkMessage(msg: unknown): TranscriptEvent` builds these from
+ * `normalizeWlkMessage(msg: unknown): TranscriptEvent[]` builds these from
  * captured wlk fixtures, and `TranscriptContext.events` feeds them to the LLM
  * adapter.
  *
@@ -18,6 +18,17 @@
  * broadcast: 'mic' -> 'me', anything else -> 'other'. Optional because events
  * may be constructed before that point (the step-15 context parser); the
  * step-18 reducer defaults an absent speaker to 'unknown'.
+ *
+ * `segmentId` (audit step 8) is the stable committed-segment identity derived
+ * from wlk's own fields — `start` timestamp + `lines[]` index — so an in-place
+ * revision of the same segment (fixture indexes 11 -> 12, same start
+ * "0:00:00.34" index 0, text extended by " test") carries the SAME id and
+ * downstream REPLACES instead of appending. For `kind: 'partial'` the id is
+ * `partial:<source>:<seq>` (seq is per-adapter per segment, so revisions share
+ * it until the segment commits and seq advances). The optional wlk fields
+ * (`start`, `end`, `detectedLanguage`, `speakerId`) are carried verbatim from
+ * `lines[]` for speaker attribution (step 10) and debugging; they are absent on
+ * partials.
  */
 export interface TranscriptEvent {
   source: 'mic' | 'loopback'
@@ -26,6 +37,11 @@ export interface TranscriptEvent {
   seq: number
   ts: number
   speaker?: 'me' | 'other'
+  segmentId: string
+  start?: string
+  end?: string
+  detectedLanguage?: string
+  speakerId?: number
 }
 
 /**

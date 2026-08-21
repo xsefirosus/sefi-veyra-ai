@@ -72,10 +72,26 @@ function wireAdapterEvents(
 ): void {
   const speaker = labelForSource(source)
   adapter.onPartial?.((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
+    broadcastTranscript({
+      source,
+      speaker,
+      kind: 'partial',
+      text,
+      seq,
+      ts: Date.now(),
+      segmentId: `partial:${source}:${seq}`
+    })
   })
   adapter.onFinal?.((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
+    broadcastTranscript({
+      source,
+      speaker,
+      kind: 'final',
+      text,
+      seq,
+      ts: Date.now(),
+      segmentId: `final:${source}:${seq}`
+    })
   })
   adapter.onError?.((err) => {
     console.error(`[capture] STT adapter error (${source}):`, err)
@@ -190,10 +206,26 @@ async function handleTestAudio(): Promise<void> {
   const source: TranscriptEvent['source'] = 'mic'
   const speaker: TranscriptEvent['speaker'] = labelForSource(source)
   adapter.onPartial((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
+    broadcastTranscript({
+      source,
+      speaker,
+      kind: 'partial',
+      text,
+      seq,
+      ts: Date.now(),
+      segmentId: `partial:${source}:${seq}`
+    })
   })
   adapter.onFinal((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
+    broadcastTranscript({
+      source,
+      speaker,
+      kind: 'final',
+      text,
+      seq,
+      ts: Date.now(),
+      segmentId: `final:${source}:${seq}`
+    })
   })
   adapter.onError((err) => {
     console.error('[capture] STT adapter error:', err)
