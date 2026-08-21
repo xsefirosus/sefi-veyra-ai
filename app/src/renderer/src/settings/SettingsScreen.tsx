@@ -5,9 +5,12 @@ import {
   setAudioDevice,
   setSttModel,
   settingsReducer,
+  type Settings,
+  type SettingsAction,
   type SttModel
 } from './settings-reducer'
 import { LOOPBACK_DEVICE_ID } from '../capture/loopback-capture'
+import type { CaptureMode } from '../capture/mic-capture'
 
 const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
 
@@ -16,12 +19,21 @@ interface AudioDeviceOption {
   label: string
 }
 
+interface SettingsScreenProps {
+  settings?: Settings
+  dispatch?: React.Dispatch<SettingsAction>
+  captureFallback?: { source: 'mic' | 'loopback'; mode: CaptureMode; error: Error } | null
+}
+
 /**
  * Direction: restrained (settings form — labels above controls, one accent
  * for the primary action). Governing spec: the plan step 7 (state/plan-veyra-p1p2.md).
  */
-function SettingsScreen(): React.JSX.Element {
-  const [settings, dispatch] = useReducer(settingsReducer, initialSettings)
+function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
+  const [internalSettings, internalDispatch] = useReducer(settingsReducer, initialSettings)
+  const settings = props.settings ?? internalSettings
+  const dispatch = props.dispatch ?? internalDispatch
+  const captureFallback = props.captureFallback ?? null
   const [devices, setDevices] = useState<AudioDeviceOption[]>([
     { deviceId: null, label: 'System default' }
   ])
@@ -119,6 +131,11 @@ function SettingsScreen(): React.JSX.Element {
         <button type="submit" className="settings-save">
           Save
         </button>
+        {captureFallback && (
+          <p className="settings-fallback" role="status">
+            Audio fallback ({captureFallback.source}): {captureFallback.mode}
+          </p>
+        )}
         {saved && <p className="settings-saved">Settings saved</p>}
       </form>
     </div>

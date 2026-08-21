@@ -122,7 +122,7 @@ have to break it.
   Verify: `npm test`, `npm run build`, and the step-21 e2e harness still exits 0.
   Commit.
 
-- [ ] 4. **Call the capture code that is currently orphaned (renderer).** (needs: 3)
+- [x] 4. **Call the capture code that is currently orphaned (renderer).** (needs: 3)
   `startMicCapture` (`src/renderer/src/capture/mic-capture.ts:55`) has **zero
   call sites in the entire repo** — verified by grep across `src/` and `tests/`.
   `startLoopbackCapture` is called only under `window.api.loopbackCheckMode`
