@@ -95,7 +95,7 @@ have to break it.
   reports 0 failures with `.wlk-venv` absent (confirm with
   `test ! -e app/.wlk-venv` first). Commit.
 
-- [ ] 2. **Extract a `CaptureSession` lifecycle owner (main).** (needs: 1) New
+- [x] 2. **Extract a `CaptureSession` lifecycle owner (main).** (needs: 1) New
   `src/main/capture/capture-session.ts`. One class owning the full ordered
   lifecycle that no code performs today: `start(settings)` → spawn `WlkServer`
   with `settings.sttModel` → `await adapter.connect()` for each active track →
