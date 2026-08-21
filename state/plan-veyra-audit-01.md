@@ -155,7 +155,7 @@ have to break it.
   `tests/stt-adapter.test.ts` to assert options reach the constructed adapter.
   Verify: `npm test`. Commit.
 
-- [ ] 7. **Prove or disprove concurrent wlk WS sessions.** (needs: 6) The code comment at
+- [x] 7. **Prove or disprove concurrent wlk WS sessions.** (needs: 6) The code comment at
   `src/main/index.ts:211` still records this as UNKNOWN while the dual-track
   design depends on it. Write `scripts/probe-wlk-concurrent.mjs` (portable Node,
   mirroring `probe-wlk.mjs`): start one wlk, open TWO `/asr` sockets, stream the
