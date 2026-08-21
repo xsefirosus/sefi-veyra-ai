@@ -1,10 +1,11 @@
 # VEYRA Phase 2 — Live Demo Script (human-facing)
 
-Run this on the demo machine (Windows, PowerShell). This is the FIRST live-mic
-test of the app: the loopback path was verified with a synthetic 440 Hz tone
-(energy check, `state/loopback-check.json`) and mic transcription was verified
-by feeding the test WAV through the same adapter path (`state/phase2-demo.json`)
-— a real human speaking into a real mic has not been exercised yet.
+Run this on the demo machine (Windows, PowerShell). The loopback path was
+verified with a synthetic 440 Hz tone (`state/loopback-check.json`), mic
+transcription was verified by feeding the test WAV through the same
+`adapter.send()` path the mic uses (`state/phase2-demo.json`), and the unit
+suite covers the parser/reducer/session lifecycle. A real human speaking into a
+real mic has NOT been exercised yet — that is this script's purpose.
 
 ## 1. Start the app
 
@@ -17,68 +18,89 @@ npm run dev
 
 Two windows appear:
 
-- **Main window** (1100x760, title `VEYRA`) — the settings screen.
-- **Overlay** (640x120, frameless, always on top, bottom of the screen) —
-  shows `Listening…` until audio arrives.
+- **Main window** (title `VEYRA`) — Start/Stop control + status chip at the
+  top, transcript panel beside/above the settings form.
+- **Overlay** (frameless, always on top) — bottom-center of the screen by
+  default. You can **drag it by its surface** and **resize it from its edges**;
+  its position and size are saved to `userData/veyra-overlay-bounds.json`
+  (validated on read) and restored on the next launch. Until a session is
+  running it shows `Idle — press Start listening`, not `Listening…`.
 
-> STT model defaults to `tiny`. Want better accuracy? In the settings screen,
-> pick `base` or `small` and Save **before** starting the demo (the change
-> takes effect on the next app launch — the wlk server is started at boot).
+> Nothing runs until you press **Start listening**. The wlk server is spawned
+> at that moment with the currently saved STT model, so a model change takes
+> effect on the next session start — no app restart needed.
 
 ## 2. Check the settings screen (main window)
 
-- Header reads **VEYRA**.
-- **Gemini API key** — password field (paste a key; it is stored encrypted via
-  Windows DPAPI in `userData`, never plaintext, never logged).
-- **STT model** — select: `tiny` / `base` / `small`.
-- **Audio device** — select: `System default`, your mic(s), and
-  `System audio (loopback)`.
-- **Save** button — click it to persist.
+- Header reads **VEYRA**; above it sit the **Start/Stop listening** button and
+  a live status chip: `Idle`, `Starting model… (first run may take minutes to
+  download)`, `Listening`, `Stopping…`, or `Error: <message>`.
+- **Gemini API key** — password field. Saved settings are reloaded on launch;
+  a stored key shows as a masked "saved" state rather than an empty box.
+- **STT model** — select: `tiny` / `base` / `small`. Save persists it.
+- **Audio device** — populated with real labels once mic permission is granted
+  (the list re-enumerates after permission and on `devicechange`; before that,
+  raw ids may show).
+- **Save** button — click to persist. If persistence fails (e.g. safeStorage
+  unavailable), an error is surfaced instead of failing silently, and the
+  "saved" flag clears on your next edit.
 
-## 3. Speak — check `me` lines in the overlay
+## 3. Speak — check `me` lines
 
-1. In the settings screen, pick your mic (or `System default`) and Save.
-2. Windows will ask for microphone permission — **Allow**.
-3. Speak normally ("Testing one two three…").
+1. Click **Start listening**. Watch the chip go `Starting model…` →
+   `Listening`. Windows asks for microphone permission — **Allow**.
+2. Speak normally ("Testing one two three…").
 
-What you should see in the **overlay** (and the transcript panel in the main
-window):
+What you should see in the overlay and the transcript panel:
 
-- **Partials** appear while you speak — italic/grey, live-revising.
-- **Finals** appear a moment later — solid text.
-- Each line carries the speaker tag **`me`**.
+- **Partials** while you speak — grey/live-revising.
+- **Finals** a moment later — solid text. Each committed line carries its
+  speaker tag (**`me`** for your mic). A sentence revises IN PLACE — it does
+  not append duplicates.
+- New lines pin the view to the bottom; scroll up to read history and it stays
+  put until you return to the bottom.
+- Transcript text is selectable and copyable; the panel has a one-click
+  **Copy** button (shows `Copied` / `Copy failed`).
 
 ## 4. Play system audio — check `other` lines
 
-1. Start any audio on the machine (YouTube, a local player, the Windows
-   "Test" sound).
-2. The loopback capture (dual-track with the mic) transcribes it in the same
-   overlay.
+1. While listening, play any system audio (YouTube, local player).
+2. The loopback capture transcribes it into the same transcript.
 
-What you should see: lines tagged **`other`** appearing alongside your mic
-lines. If no `other` lines appear, check that "System audio (loopback)" is the
-selected device and the sound is actually playing (the loopback energy path
-itself was verified with a tone — see `state/loopback-check.json`).
+Expected: lines tagged **`other`** alongside your `me` lines (wlk diarization
+refines the label when it detects speakers). If nothing appears, check the
+sound is actually playing — the loopback energy path itself was verified with
+a tone (`state/loopback-check.json`).
+
+Press **Stop listening** when done; the chip returns to `Idle`.
 
 ## 5. What "done" looks like
 
-- Overlay shows live partials → finals for your voice, tagged `me`.
-- System audio produces `other`-tagged lines.
-- Settings screen shows the VEYRA header, Gemini API key field, and the
-  model/device selects, and Save persists.
+- Start button drives the session; the chip reflects every state including
+  errors (a failed wlk spawn or dropped socket surfaces as `Error: …`, not a
+  hang).
+- Your voice produces `me` lines, system audio produces `other` lines, each
+  sentence commits exactly once (revisions replace, never duplicate).
+- The overlay moves/resizes and keeps its bounds across restarts.
+- Transcript is selectable/copyable; settings round-trip across restarts.
 
-## Verified numbers for this pass (step 22, 2026-08-20)
+## Verified numbers for this pass (audit step 18 agent half, 2026-08-22)
 
-Re-ran the step-21 e2e harness (real wlk `tiny`, real test WAV through the
-same `adapter.send(int16)` path, loopback merged from `state/loopback-check.json`):
+Re-ran the e2e harness after audit steps 1-17 (real wlk `tiny`, real test WAV
+through the same adapter path, loopback energy merged from
+`state/loopback-check.json`). `finals` now counts DISTINCT committed segments
+(deduped by stable segmentId), not raw final events — the step-8 fix makes wlk
+re-emit cumulative `lines[]`, so raw counting read 46 for one sentence.
 
 | Assert | Result |
 |---|---|
-| partials >= 1 | 24 (PASS; step-21 run: 23, delta +1) |
-| finals >= 1 | 46 (PASS; step-21 run: 45, delta +1) |
-| firstPartialMs < 2000 | 1682 (PASS; step-21 run: 1552, delta +130) |
-| loopbackEnergyCaptured === true | true (PASS; unchanged) |
+| partials >= 1 | 31 (PASS) |
+| finals == 1 (true segment count) | 1 (PASS; raw final events: 40) |
+| firstPartialMs < 2000 | 1925 (PASS; see note) |
+| loopbackEnergyCaptured === true | true (PASS) |
 
-`labelsSeen = ["me"]`. `state/latency-p2.json` written with `pass: true`
-(1682 ms < 2000 ms). Model-load time variance explains the small delta between
-runs; both runs pass the sub-2s criterion.
+Latency note: CPU-only `tiny` straddles the 2 s criterion between runs — the
+pre-instrumentation-fix run measured 2093 ms, the recorded run 1925 ms
+(`state/latency-p2.json`, `pass: true`). Both numbers are real measurements;
+neither was chosen or discarded to fit the threshold. Full detail:
+`state/audit-01-verify.md`.

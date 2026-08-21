@@ -259,8 +259,8 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
   readonly url: string
   readonly source: 'mic' | 'loopback'
   readonly model: SttModel
-  private partialCb: ((text: string, seq: number) => void) | null = null
-  private finalCb: ((text: string, seq: number) => void) | null = null
+  private partialCb: ((text: string, seq: number, segmentId?: string) => void) | null = null
+  private finalCb: ((text: string, seq: number, segmentId?: string) => void) | null = null
   private errorCb: ((err: Error) => void) | null = null
   /** Segment sequence counter -- see the header for the advance rule. */
   private seq = 0
@@ -319,11 +319,13 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
     this.transport.send(new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength))
   }
 
-  onPartial(cb: (text: string, seq: number) => void): void {
+  // Audit step 18: the optional third argument is the parser's stable
+  // segmentId (step 8) -- see SttAdapter in shared/stt/stt-adapter.ts.
+  onPartial(cb: (text: string, seq: number, segmentId?: string) => void): void {
     this.partialCb = cb
   }
 
-  onFinal(cb: (text: string, seq: number) => void): void {
+  onFinal(cb: (text: string, seq: number, segmentId?: string) => void): void {
     this.finalCb = cb
   }
 
@@ -348,10 +350,10 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
     const events = normalizeWlkMessage(data, this.source, this.seq)
     for (const event of events) {
       if (event.kind === 'final') {
-        this.finalCb?.(event.text, event.seq)
+        this.finalCb?.(event.text, event.seq, event.segmentId)
         this.seq += 1 // segment committed; the next event opens the next segment
       } else {
-        this.partialCb?.(event.text, event.seq)
+        this.partialCb?.(event.text, event.seq, event.segmentId)
       }
     }
   }

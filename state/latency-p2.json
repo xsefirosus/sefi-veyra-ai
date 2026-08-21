@@ -1,5 +1,5 @@
 {
-  "firstPartialMs": 1682,
+  "firstPartialMs": 1925,
   "model": "tiny",
   "criterion": "sub-2s spoken-to-partial",
   "pass": true

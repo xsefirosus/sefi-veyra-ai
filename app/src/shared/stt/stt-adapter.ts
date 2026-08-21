@@ -51,12 +51,20 @@ function validateAdapterOptions(opts: SttAdapterOptions): void {
  * through the callbacks. `seq` is the adapter's monotonically increasing
  * segment sequence number: a partial with a given seq is the live revision of
  * that segment, and the final with that seq is its committed text.
+ *
+ * Audit step 18: the callbacks also receive the parser's stable `segmentId`
+ * (step 8) as an optional third argument. wlk re-sends cumulative `lines[]`,
+ * so one committed segment legitimately fires onFinal MORE THAN ONCE (each
+ * re-emission advances seq); consumers that need "how many DISTINCT segments
+ * committed" (e.g. the e2e harness) dedupe by this id instead of counting
+ * callbacks. Optional + trailing, so existing (text, seq) handlers are
+ * unaffected.
  */
 export interface SttAdapter {
   connect(): Promise<void>
   send(pcm: Int16Array): void
-  onPartial(cb: (text: string, seq: number) => void): void
-  onFinal(cb: (text: string, seq: number) => void): void
+  onPartial(cb: (text: string, seq: number, segmentId?: string) => void): void
+  onFinal(cb: (text: string, seq: number, segmentId?: string) => void): void
   onError(cb: (err: Error) => void): void
   close(): Promise<void>
 }
@@ -124,11 +132,11 @@ function createLazyLocalAdapter(opts: SttAdapterOptions = {}): SttAdapter {
         throw new Error('stt-adapter: send() before connect() (call connect() first)')
       }
     },
-    onPartial(cb: (text: string, seq: number) => void): void {
+    onPartial(cb: (text: string, seq: number, segmentId?: string) => void): void {
       if (real) real.onPartial(cb)
       else pending.push((adapter) => adapter.onPartial(cb))
     },
-    onFinal(cb: (text: string, seq: number) => void): void {
+    onFinal(cb: (text: string, seq: number, segmentId?: string) => void): void {
       if (real) real.onFinal(cb)
       else pending.push((adapter) => adapter.onFinal(cb))
     },

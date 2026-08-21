@@ -18,9 +18,12 @@
  *      step-14 probe waited for ready_to_stop before closing; the adapter's
  *      close() sends EOS and closes immediately, which would drop the flush);
  *   6. merges state/loopback-check.json (step 19) -> loopbackEnergyCaptured;
- *   7. writes state/phase2-demo.json {partials, finals, labelsSeen,
- *      firstPartialMs, loopbackEnergyCaptured} and state/latency-p2.json
- *      {firstPartialMs, model:'tiny', criterion:'sub-2s spoken-to-partial',
+ *   7. writes state/phase2-demo.json {partials, finals (= DISTINCT committed
+ *      segments, deduped by the step-8 stable segmentId -- audit step 18),
+ *      finalEventsRaw (raw onFinal calls; wlk re-sends cumulative lines[] so
+ *      one segment fires once per status message after committing),
+ *      labelsSeen, firstPartialMs, loopbackEnergyCaptured} and
+ *      state/latency-p2.json {firstPartialMs, model:'tiny', criterion:'sub-2s spoken-to-partial',
  *      pass: firstPartialMs < 2000}, then shuts wlk down and quits.
  *
  * NEVER fakes a number: if firstPartialMs >= 2000 (or no partial arrived at
@@ -90,7 +93,11 @@ function repoRoot(): string {
 
 export interface E2eResult {
   partials: number
+  /** DISTINCT committed segments (deduped by the step-8 stable segmentId). */
   finals: number
+  /** Raw onFinal callbacks -- wlk re-sends cumulative lines[], so one
+   * committed segment fires this once per status message after it commits. */
+  finalEventsRaw: number
   labelsSeen: string[]
   firstPartialMs: number | null
   loopbackEnergyCaptured: boolean | null
@@ -130,7 +137,15 @@ export async function runE2e(): Promise<E2eResult> {
   const adapter = new WhisperLiveKitSttAdapter({ source: 'mic' })
 
   let partials = 0
-  let finals = 0
+  // Audit step 18: `finals` counts DISTINCT committed segments (the parser's
+  // stable segmentId), not raw onFinal calls -- wlk re-sends cumulative
+  // lines[] on every status message, so one committed segment legitimately
+  // fires onFinal once per message after it commits (fixture indexes 11-12:
+  // two events, ONE segment; the reducer replaces by segmentId). Counting raw
+  // calls here is what made the pre-step-8 artifact read finals=46 for a
+  // single-sentence WAV. The raw count is kept alongside for transparency.
+  let finalEventsRaw = 0
+  const committedSegmentIds = new Set<string>()
   const labels = new Set<string>()
   let tFirstSend: number | null = null
   let firstPartialMs: number | null = null
@@ -147,8 +162,11 @@ export async function runE2e(): Promise<E2eResult> {
         firstPartialMs = lastEventAt - tFirstSend
       }
     })
-    adapter.onFinal(() => {
-      finals += 1
+    adapter.onFinal((_text, _seq, segmentId) => {
+      finalEventsRaw += 1
+      // The parser always sets segmentId on finals (context-parser.ts:99);
+      // 'unknown' is a never-taken guard, not a measured category.
+      committedSegmentIds.add(segmentId ?? 'unknown')
       lastEventAt = Date.now()
       labels.add(labelForSource('mic'))
     })
@@ -178,9 +196,11 @@ export async function runE2e(): Promise<E2eResult> {
   }
 
   const labelsSeen = Array.from(labels)
+  const finals = committedSegmentIds.size
   const demo = {
     partials,
     finals,
+    finalEventsRaw,
     labelsSeen,
     firstPartialMs,
     loopbackEnergyCaptured
@@ -209,7 +229,8 @@ if (process.env['VEYRA_E2E'] === '1') {
   runE2e()
     .then((r) => {
       console.log(
-        `[e2e] RESULT partials=${r.partials} finals=${r.finals} labelsSeen=${JSON.stringify(r.labelsSeen)} ` +
+        `[e2e] RESULT partials=${r.partials} finals=${r.finals} finalEventsRaw=${r.finalEventsRaw} ` +
+          `labelsSeen=${JSON.stringify(r.labelsSeen)} ` +
           `firstPartialMs=${r.firstPartialMs} loopbackEnergyCaptured=${r.loopbackEnergyCaptured}`
       )
       if (r.partials > 0) {

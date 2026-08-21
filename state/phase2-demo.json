@@ -1,9 +1,10 @@
 {
-  "partials": 24,
-  "finals": 46,
+  "partials": 31,
+  "finals": 1,
+  "finalEventsRaw": 40,
   "labelsSeen": [
     "me"
   ],
-  "firstPartialMs": 1682,
+  "firstPartialMs": 1925,
   "loopbackEnergyCaptured": true
 }
