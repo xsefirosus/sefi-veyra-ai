@@ -46,7 +46,7 @@ function TranscriptPanel({
           <p className={`overlay-empty ${isError ? 'overlay-empty--error' : ''}`}>{emptyText}</p>
         ) : (
           tail.map((l) => (
-            <p key={`${l.kind}-${l.seq}`} className={`overlay-line ${l.kind}`}>
+            <p key={l.segmentId} className={`overlay-line ${l.kind}`}>
               <SpeakerTag speaker={l.speaker} />
               {l.text}
             </p>
@@ -56,15 +56,21 @@ function TranscriptPanel({
     )
   }
 
+  // Window the panel list so an hour-long meeting does not render thousands
+  // of DOM nodes on every partial. The reducer caps committed lines; the
+  // panel additionally windows the rendered slice.
+  const WINDOW = 200
+  const visible = lines.length > WINDOW ? lines.slice(-WINDOW) : lines
+
   return (
     <section className="transcript-panel" aria-label="Transcript">
       <h2 className="transcript-heading">Transcript</h2>
-      {lines.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="transcript-empty">No transcript yet.</p>
       ) : (
         <ul className="transcript-lines">
-          {lines.map((l, i) => (
-            <li key={i} className={`transcript-line ${l.kind}`}>
+          {visible.map((l) => (
+            <li key={l.segmentId} className={`transcript-line ${l.kind}`}>
               <SpeakerTag speaker={l.speaker} />
               <span className="transcript-text">{l.text}</span>
             </li>

@@ -188,7 +188,7 @@ have to break it.
   segment whose final text is `"testing 1, 2, 3. This is the Vero meeting
   transcription test"` — not two, not 46. Verify: `npm test`. Commit.
 
-- [ ] 9. **Fix cross-track seq collision and segment-keyed reducer state.** (needs: 8) Each
+- [x] 9. **Fix cross-track seq collision and segment-keyed reducer state.** (needs: 8) Each
   adapter instance owns a private `seq` starting at 0
   (`whisper-livekit.ts:142`), so the mic track and the loopback track both emit
   seq 0, 1, 2… The reducer matches pending partials by seq ALONE
@@ -206,7 +206,7 @@ have to break it.
   colliding seq values produce two independent lines; a revision replaces rather
   than appends; the cap evicts oldest-first. Verify: `npm test`. Commit.
 
-- [ ] 10. **Use wlk diarization for speaker labels.** (needs: 8) `labelForSource`
+- [x] 10. **Use wlk diarization for speaker labels.** (needs: 8) `labelForSource`
   (`src/shared/stt/speaker-label.ts`) maps `mic → me`, everything else →
   `other`, and the parser docstring explicitly drops the real `speaker` field.
   The fixture proves wlk supplies it (`lines[0].speaker === 1`). Because the mic
