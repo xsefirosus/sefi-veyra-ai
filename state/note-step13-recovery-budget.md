@@ -1,0 +1,1 @@
+﻿Decision (audit step 13): NodeWsTransport reconnect budget (5 attempts, ~15.5s capped backoff) intentionally exceeds WlkServer restart chain (3 attempts, ~7s + probe) so a respawned wlk process normally wins the race and sockets recover silently; both terminal paths converge on CaptureSession.fail() (first error wins) -> step-12 'error' broadcast.
