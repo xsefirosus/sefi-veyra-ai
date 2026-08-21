@@ -100,15 +100,19 @@ export function wlkBinPath(anchor: string = __dirname): string {
 }
 
 /**
- * Pure mapping from the settings model to the wlk argv. The executable is the
- * venv wlk (fail-fast existence check above); the args are the confirmed flags
- * --model <model> --host 127.0.0.1 --port 8000. Anything other than
- * tiny/base/small throws: the settings UI restricts to these three, and an
+ * Pure mapping from the settings model to the wlk argv. The args are the
+ * confirmed flags --model <model> --host 127.0.0.1 --port 8000. Anything other
+ * than tiny/base/small throws: the settings UI restricts to these three, and an
  * unknown value would silently fall through to wlk's own default instead of
- * failing loudly. `wlkBin` defaults to the resolved venv path so WlkServer can
- * inject its own resolved (or WLK_BIN-overridden) path without a second lookup.
+ * failing loudly.
+ *
+ * `wlkBin` is a REQUIRED explicit argument (plan step 1: no default means no
+ * hidden filesystem dependency in the unit suite -- a fresh clone without
+ * .wlk-venv must run every test). The caller resolves it: WlkServer.start()
+ * does the lazy wlkBinPath() resolution (with its existence check) at spawn
+ * time, and scripts/probe-wlk.mjs passes its own WLK_BIN-or-resolved path.
  */
-export function buildWlkCommand(model: WlkModel, wlkBin: string = wlkBinPath()): WlkCommand {
+export function buildWlkCommand(model: WlkModel, wlkBin: string): WlkCommand {
   if (!WLK_MODELS.includes(model)) {
     throw new Error(
       `wlk-server: unsupported model "${String(model)}" (expected one of: tiny, base, small)`
@@ -136,13 +140,19 @@ export interface WlkServerOptions {
  * default 60s), shutdown() kills the child (the whole process tree on win32 --
  * wlk.exe spawns uvicorn as a child, and an orphaned uvicorn keeps the port
  * bound). Idempotent: shutdown() before start() or after an exit is a no-op.
+ *
+ * Plan step 1 (environment-independent unit suite): the constructor stores
+ * opts.wlkBin WITHOUT resolving it (null when absent). Resolution -- and the
+ * venv existence check -- happens lazily in start(), at spawn time, so
+ * constructing a WlkServer never touches the filesystem and unit tests run on
+ * any machine, .wlk-venv or not.
  */
 export class WlkServer {
   readonly model: WlkModel
   readonly host: string
   readonly port: number
   readonly wsUrl: string
-  private readonly wlkBin: string
+  private readonly wlkBin: string | null
   private readonly startTimeoutMs: number
   private readonly pollIntervalMs: number
   private child: ChildProcess | null = null
@@ -153,7 +163,8 @@ export class WlkServer {
     this.host = opts.host ?? WLK_DEFAULT_HOST
     this.port = opts.port ?? WLK_DEFAULT_PORT
     this.wsUrl = `ws://${this.host}:${this.port}${WLK_WS_PATH}`
-    this.wlkBin = opts.wlkBin ?? wlkBinPath()
+    // Lazy: resolved (and existence-checked) in start(), never here (step 1).
+    this.wlkBin = opts.wlkBin ?? null
     this.startTimeoutMs = opts.startTimeoutMs ?? WLK_START_TIMEOUT_MS
     this.pollIntervalMs = opts.pollIntervalMs ?? 500
   }
@@ -164,7 +175,11 @@ export class WlkServer {
     if (typeof WebSocket === 'undefined') {
       throw new Error('wlk-server: global WebSocket unavailable (needs Node >= 22)')
     }
-    const { cmd, args } = buildWlkCommand(this.model, this.wlkBin)
+    // Lazy resolution at spawn time (plan step 1): the venv path is looked up
+    // -- and existence-checked, wlkBinPath() throws with a setup hint when the
+    // binary is missing -- only when the caller did not inject an explicit bin.
+    const wlkBin = this.wlkBin ?? wlkBinPath()
+    const { cmd, args } = buildWlkCommand(this.model, wlkBin)
     // Raw-PCM framing (see header: the step-16 adapter streams s16le PCM;
     // without --pcm-input wlk routes bytes through ffmpeg). buildWlkCommand's
     // tested contract is untouched -- this is a spawn-site fix, per the
