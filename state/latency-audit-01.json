@@ -1,0 +1,55 @@
+{
+  "capturedAt": "2026-08-21T22:29:01.381Z",
+  "model": "tiny",
+  "topology": "one wlk process, two concurrent /asr sessions",
+  "stimulusPrimary": {
+    "mic": "wav",
+    "loopback": "synthetic am tone (350+440 Hz, gated)"
+  },
+  "note": "All values are measured in this run. firstPartialMs=null means the wlk server emitted ZERO transcription events for that track (measured absence); no number is carried over from earlier runs.",
+  "primary": {
+    "mic": {
+      "firstPartialMs": 2012,
+      "partials": 32,
+      "finals": 36,
+      "labelsSeen": [
+        "me"
+      ]
+    },
+    "loopback": {
+      "firstPartialMs": null,
+      "partials": 0,
+      "finals": 0,
+      "labelsSeen": []
+    },
+    "totalFirstPartialMs": null
+  },
+  "supplemental": {
+    "stimulus": {
+      "mic": "wav",
+      "loopback": "wav"
+    },
+    "mic": {
+      "firstPartialMs": 2776,
+      "partials": 35,
+      "finals": 28,
+      "labelsSeen": [
+        "me"
+      ]
+    },
+    "loopback": {
+      "firstPartialMs": 2167,
+      "partials": 49,
+      "finals": 28,
+      "labelsSeen": [
+        "other"
+      ]
+    },
+    "totalFirstPartialMs": 2776,
+    "blocker": null
+  },
+  "criterionMs": 2000,
+  "pass": false,
+  "passScope": "primary stimulus only (mic WAV + loopback tone); supplemental is context. Supplemental speech-on-both-tracks run measured mic=2776ms loopback=2167ms total=2776ms against criterionMs=2000",
+  "blocker": null
+}

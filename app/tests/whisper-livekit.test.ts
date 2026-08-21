@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   NodeWsTransport,
   WhisperLiveKitSttAdapter,
@@ -225,7 +225,6 @@ describe('dual-track (plan step 19): two adapter instances = two independent wlk
     expect(mic).not.toBe(loopback)
   })
 })
-
 
 /**
  * Minimal socket fake for the REAL NodeWsTransport (audit plan step 13): the

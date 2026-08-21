@@ -216,9 +216,9 @@ describe('wlkBinPath platform branch (audit plan step 14)', () => {
     // fall back to it -- it fails fast pointing at the portable installer.
     const root = makeFakeAppRoot('win32')
     try {
-      expect(() =>
-        withPlatform('linux', () => wlkBinPath(root))
-      ).toThrow(/setup-wlk\.mjs[\s\S]*missing|missing[\s\S]*setup-wlk\.mjs/)
+      expect(() => withPlatform('linux', () => wlkBinPath(root))).toThrow(
+        /setup-wlk\.mjs[\s\S]*missing|missing[\s\S]*setup-wlk\.mjs/
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

@@ -266,7 +266,7 @@ have to break it.
   Verify: `scripts/setup-wlk.mjs` completes on this Linux container and
   `wlk --help` exits 0. Commit.
 
-- [ ] 15. **Anti-aliased downsampling + real dual-track latency re-measure.** (needs: 9, 7)
+- [x] 15. **Anti-aliased downsampling + real dual-track latency re-measure.** (needs: 9, 7)
   `downsample` (`src/shared/audio/format.ts`) is naive linear interpolation with
   no low-pass prefilter, so 48 kHz → 16 kHz folds everything above 8 kHz back
   into the band as aliasing noise — it degrades STT accuracy on exactly the
