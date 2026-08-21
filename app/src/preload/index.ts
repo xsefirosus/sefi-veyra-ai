@@ -10,6 +10,9 @@ const api = {
   // apiKey is safeStorage-encrypted in veyra-settings.json under userData.
   saveSettings: (settings: Settings): Promise<Settings> =>
     ipcRenderer.invoke('settings:save', settings),
+  // Step 11: the read half of the round-trip — persisted settings (apiKey
+  // decrypted in main via safeStorage) so the form can hydrate after restart.
+  loadSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:load'),
   // Step 3: CaptureSession lifecycle -- renderer requests start/stop and observes state
   startSession: (settings: Settings): Promise<{ state: string; lastError: string | null }> =>
     ipcRenderer.invoke('session:start', settings),

@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useState } from 'react'
 import {
+  hydrate,
   initialSettings,
   setApiKey,
   setAudioDevice,
@@ -9,6 +10,12 @@ import {
   type SettingsAction,
   type SttModel
 } from './settings-reducer'
+import {
+  applyLoadedSettings,
+  persistSettings,
+  settingsUiReducer,
+  initialSettingsUiState
+} from './settings-persistence'
 import { LOOPBACK_DEVICE_ID } from '../capture/loopback-capture'
 import type { CaptureMode } from '../capture/mic-capture'
 
@@ -37,7 +44,32 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   const [devices, setDevices] = useState<AudioDeviceOption[]>([
     { deviceId: null, label: 'System default' }
   ])
-  const [saved, setSaved] = useState(false)
+  const [ui, dispatchUi] = useReducer(settingsUiReducer, initialSettingsUiState)
+
+  // Step 11: hydration on mount — a saved key/model/device come back from
+  // settings:load (apiKey decrypted in main) instead of the form starting
+  // empty every restart. A failed load keeps the defaults standing.
+  useEffect(() => {
+    let cancelled = false
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    if (!maybeApi?.loadSettings) return
+    void applyLoadedSettings(maybeApi.loadSettings, (loaded) => {
+      if (cancelled) return
+      dispatch(hydrate(loaded))
+      dispatchUi({ type: 'hydrated', hasKey: loaded.apiKey !== '' })
+    })
+    return () => {
+      cancelled = true
+    }
+    // dispatch is a useReducer/prop dispatcher: stable for the mount lifetime.
+  }, [dispatch])
+
+  // Every field edit also resets the transient flags ("Settings saved" must
+  // not persist forever, step 11).
+  const edit = (action: SettingsAction): void => {
+    dispatch(action)
+    dispatchUi({ type: 'edit' })
+  }
 
   // Audio device list feeds the device <select> (plan step 17 feeds this same
   // list from the capture path; enumerateDevices is the zero-dependency source).
@@ -71,9 +103,16 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   }, [])
 
   const onSave = (): void => {
-    // Contract (preload index.ts + main index.ts): settings:save validates and
-    // stores to the in-memory map; resolves with the stored settings.
-    void window.api.saveSettings(settings).then(() => setSaved(true))
+    // Contract (preload index.ts + main settings-store.ts): settings:save
+    // validates and persists; a rejection (e.g. the documented
+    // "safeStorage encryption unavailable; refusing to persist apiKey" throw)
+    // surfaces as an error message instead of a silent unhandled rejection.
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    if (!maybeApi?.saveSettings) return
+    void persistSettings(maybeApi.saveSettings, settings).then((outcome) => {
+      if (outcome.ok) dispatchUi({ type: 'saveOk' })
+      else dispatchUi({ type: 'saveFailed', message: outcome.message })
+    })
   }
 
   return (
@@ -91,18 +130,23 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
           <input
             type="password"
             value={settings.apiKey}
-            onChange={(e) => dispatch(setApiKey(e.target.value))}
+            onChange={(e) => edit(setApiKey(e.target.value))}
             placeholder="Paste your Gemini API key"
             autoComplete="off"
             spellCheck={false}
           />
+          {ui.keyRestored && (
+            <p className="settings-restored" role="status">
+              Saved API key loaded (masked)
+            </p>
+          )}
         </label>
 
         <label className="settings-field">
           <span className="settings-label">STT model</span>
           <select
             value={settings.sttModel}
-            onChange={(e) => dispatch(setSttModel(e.target.value as SttModel))}
+            onChange={(e) => edit(setSttModel(e.target.value as SttModel))}
           >
             {STT_MODELS.map((m) => (
               <option key={m} value={m}>
@@ -116,9 +160,7 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
           <span className="settings-label">Audio device</span>
           <select
             value={settings.audioDeviceId ?? ''}
-            onChange={(e) =>
-              dispatch(setAudioDevice(e.target.value === '' ? null : e.target.value))
-            }
+            onChange={(e) => edit(setAudioDevice(e.target.value === '' ? null : e.target.value))}
           >
             {devices.map((d) => (
               <option key={d.deviceId ?? '__default__'} value={d.deviceId ?? ''}>
@@ -136,7 +178,12 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
             Audio fallback ({captureFallback.source}): {captureFallback.mode}
           </p>
         )}
-        {saved && <p className="settings-saved">Settings saved</p>}
+        {ui.saved && <p className="settings-saved">Settings saved</p>}
+        {ui.error && (
+          <p className="settings-error" role="alert">
+            {ui.error}
+          </p>
+        )}
       </form>
     </div>
   )

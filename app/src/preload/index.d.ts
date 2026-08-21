@@ -5,6 +5,8 @@ import type { WindowRole } from './transcript-api'
 
 export interface Api {
   saveSettings: (settings: Settings) => Promise<Settings>
+  /** Step 11: load the persisted settings (apiKey decrypted in main via safeStorage). */
+  loadSettings: () => Promise<Settings>
   /** Step 17: send one 16 kHz Float32Array PCM chunk to the main-process 'pcm' handler. */
   sendPcm: (chunk: Float32Array) => void
   /** Step 19: send one 16 kHz Float32Array PCM chunk to the main-process 'pcm-loopback' handler (loopback track -> second adapter session). */

@@ -220,7 +220,7 @@ have to break it.
   Tests `tests/speaker-label.test.ts`: diarization present wins; absent falls
   back; unknown stays conservative (`other`). Verify: `npm test`. Commit.
 
-- [ ] 11. **Fix the settings round-trip (currently write-only).** (needs: 5)
+- [x] 11. **Fix the settings round-trip (currently write-only).** (needs: 5)
   `registerIpcHandlers` registers `settings:load` (`settings-store.ts`), but the
   preload exposes no `loadSettings` and `SettingsScreen` initializes from
   `initialSettings` unconditionally (`SettingsScreen.tsx:24`) — so a saved Gemini

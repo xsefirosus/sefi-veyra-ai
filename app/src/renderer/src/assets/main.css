@@ -110,6 +110,20 @@ body {
   text-align: center;
 }
 
+/* Step 11: masked "saved key" hint under the API key field after hydration. */
+.settings-restored {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--ev-c-text-2);
+}
+
+/* Step 11: save failures (e.g. safeStorage unavailable) surface here. */
+.settings-error {
+  font-size: 0.875rem;
+  color: #ff8a80;
+  text-align: center;
+}
+
 /*
  * Plan step 18: transcript panel (settings window) + overlay live rendering.
  * Partials render italic/grey (in-flight revision of a segment), finals solid
