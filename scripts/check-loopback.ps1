@@ -1,6 +1,11 @@
 <#
 check-loopback.ps1 -- plan step 19 verification (Windows WASAPI loopback).
 
+Platform pick (audit step 14): Windows can use this script OR the portable
+`node scripts/check-loopback.mjs` (same flow, per-OS tone player); macOS/Linux
+must use the .mjs. The macOS capture path itself is still PENDING -- see
+docs/loopback-macos.md.
+
 Flow:
   1. npm run build in app/ (the check runs the BUILT bundle: fast boot, no vite).
   2. Generate a 3 s 440 Hz tone WAV (16-bit mono PCM @ 16 kHz, pure PowerShell).

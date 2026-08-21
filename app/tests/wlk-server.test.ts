@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import {
   buildWlkCommand,
   wlkBinPath,
@@ -135,6 +136,88 @@ describe('WlkServer spawn-failure surfacing (audit plan step 12)', () => {
     } finally {
       if (prev === undefined) delete process.env['WLK_BIN']
       else process.env['WLK_BIN'] = prev
+    }
+  })
+})
+
+describe('wlkBinPath platform branch (audit plan step 14)', () => {
+  /**
+   * Seams under test (step 14):
+   * - wlkBinPath()'s per-platform venv layout: win32 ->
+   *   `.wlk-venv/Scripts/wlk.exe`, posix -> `.wlk-venv/bin/wlk`. The posix
+   *   branch is what scripts/setup-wlk.mjs builds on macOS/Linux, so the two
+   *   must agree on the exact relative path.
+   * - The setup hint on a missing binary points at the PORTABLE installer
+   *   (scripts/setup-wlk.mjs) -- the old text named only setup-wlk.ps1, which
+   *   does not run on macOS/Linux.
+   *
+   * Verified here: the path SELECTION and existence check against temp trees
+   * shaped like both layouts. A real posix venv install (macOS/Linux) is
+   * PENDING -- this machine is win32; per the anti-hallucination registry,
+   * do not claim macOS works until it runs there.
+   */
+
+  /** Spoof process.platform for the duration of fn() (restored after). */
+  function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
+    const prev = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    try {
+      return fn()
+    } finally {
+      if (prev && 'value' in prev) {
+        Object.defineProperty(process, 'platform', { value: prev.value, configurable: true })
+      }
+    }
+  }
+
+  /** Temp app root with package.json + ONE venv layout (the given platform's). */
+  function makeFakeAppRoot(platform: NodeJS.Platform): string {
+    const root = mkdtempSync(join(tmpdir(), 'veyra-wlkbin-'))
+    const bin =
+      platform === 'win32'
+        ? join(root, '.wlk-venv', 'Scripts', 'wlk.exe')
+        : join(root, '.wlk-venv', 'bin', 'wlk')
+    mkdirSync(dirname(bin), { recursive: true })
+    writeFileSync(bin, '')
+    writeFileSync(join(root, 'package.json'), '{}')
+    return root
+  }
+
+  it.each(['linux', 'darwin'] as const)(
+    'resolves .wlk-venv/bin/wlk on %s (posix branch)',
+    (platform) => {
+      const root = makeFakeAppRoot(platform)
+      try {
+        expect(withPlatform(platform, () => wlkBinPath(root))).toBe(
+          join(root, '.wlk-venv', 'bin', 'wlk')
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('resolves .wlk-venv/Scripts/wlk.exe on win32', () => {
+    const root = makeFakeAppRoot('win32')
+    try {
+      expect(withPlatform('win32', () => wlkBinPath(root))).toBe(
+        join(root, '.wlk-venv', 'Scripts', 'wlk.exe')
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('on posix, a missing bin/wlk throws with the portable-setup hint and no win32 fallback', () => {
+    // Only the WIN32 layout exists in this tree: the posix branch must NOT
+    // fall back to it -- it fails fast pointing at the portable installer.
+    const root = makeFakeAppRoot('win32')
+    try {
+      expect(() =>
+        withPlatform('linux', () => wlkBinPath(root))
+      ).toThrow(/setup-wlk\.mjs[\s\S]*missing|missing[\s\S]*setup-wlk\.mjs/)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
     }
   })
 })

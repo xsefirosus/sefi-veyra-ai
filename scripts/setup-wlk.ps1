@@ -1,5 +1,8 @@
 # scripts/setup-wlk.ps1 -- step 12: install the local STT server (WhisperLiveKit) into app/.wlk-venv
 #
+# Platform pick (audit step 14): Windows can use this script OR the portable
+# `node scripts/setup-wlk.mjs` (same flow); macOS/Linux must use the .mjs.
+#
 # README verification (https://github.com/QuentinFuxa/WhisperLiveKit, read 2026-08-20 before
 # writing this script; raw fetch HTTP 200, 29933 bytes):
 #   - pip package name:  whisperlivekit   (README "Installation & Quick Start": `pip install whisperlivekit`;

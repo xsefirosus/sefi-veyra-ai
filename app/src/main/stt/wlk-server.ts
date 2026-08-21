@@ -90,7 +90,7 @@ export function wlkBinPath(anchor: string = __dirname): string {
     const resolved = resolve(envBin)
     if (!existsSync(resolved)) {
       throw new Error(
-        `wlk-server: WLK_BIN venv wlk missing at ${resolved} (fix WLK_BIN or run scripts/setup-wlk.ps1)`
+        `wlk-server: WLK_BIN venv wlk missing at ${resolved} (fix WLK_BIN or run scripts/setup-wlk.mjs)`
       )
     }
     return resolved
@@ -106,7 +106,7 @@ export function wlkBinPath(anchor: string = __dirname): string {
   const rel = process.platform === 'win32' ? '.wlk-venv/Scripts/wlk.exe' : '.wlk-venv/bin/wlk'
   const bin = join(dir, rel)
   if (!existsSync(bin)) {
-    throw new Error(`wlk-server: venv wlk missing at ${bin} (run scripts/setup-wlk.ps1)`)
+    throw new Error(`wlk-server: venv wlk missing at ${bin} (run scripts/setup-wlk.mjs)`)
   }
   return bin
 }

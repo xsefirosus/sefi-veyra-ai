@@ -51,5 +51,13 @@ And delete the Multi-Output Device in Audio MIDI Setup.
 
 ## Verification (once on a Mac)
 
-Run scripts/check-loopback.ps1's equivalent capture flow on macOS and confirm
-energy is captured; until then this document and the macOS path stay PENDING.
+Run the portable checker on macOS and confirm energy is captured:
+
+```bash
+node scripts/check-loopback.mjs
+```
+
+(The .ps1 twin is Windows-only; the .mjs picks afplay for tone playback. Note
+the capture path itself — Electron getDisplayMedia + BlackHole routing — is
+exactly what remains unverified here.) Until that run happens on a real Mac,
+this document and the macOS path stay PENDING.
