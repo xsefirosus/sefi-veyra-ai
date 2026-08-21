@@ -91,7 +91,14 @@ describe('transcript-reducer (plan step 18)', () => {
 
   it('toTranscriptAction passes the step-20 speaker label through to the action', () => {
     expect(
-      toTranscriptAction({ source: 'mic', kind: 'partial', text: 'hi', seq: 0, ts: 1, speaker: 'me' })
+      toTranscriptAction({
+        source: 'mic',
+        kind: 'partial',
+        text: 'hi',
+        seq: 0,
+        ts: 1,
+        speaker: 'me'
+      })
     ).toEqual({ type: 'partial', seq: 0, text: 'hi', speaker: 'me' })
     expect(
       toTranscriptAction({

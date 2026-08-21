@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createSttAdapter, type SttAdapter } from '../src/shared/stt/stt-adapter'
+import { WhisperLiveKitSttAdapter, type WsTransport } from '../src/main/stt/whisper-livekit'
 
 /**
  * MockSttAdapter: a self-contained SttAdapter implementation used to prove the
@@ -116,5 +117,104 @@ describe('stt-adapter contract', () => {
 
   it('createSttAdapter throws for cloud-assemblyai', () => {
     expect(() => createSttAdapter('cloud-assemblyai')).toThrow(/not implemented in this pass/)
+  })
+})
+
+describe('createSttAdapter injectable options (step 6)', () => {
+  it('defaults to mic / tiny / default url when no opts given', () => {
+    const adapter = createSttAdapter('local-whisperlivekit')
+    const anyAdapter = adapter as unknown as Record<string, unknown>
+    expect(anyAdapter['source']).toBe('mic')
+    expect(anyAdapter['model']).toBe('tiny')
+    // url is undefined when not customised -- real adapter will use default ws://127.0.0.1:8000/asr
+    expect(anyAdapter['url']).toBeUndefined()
+  })
+
+  it('forwards source loopback to the facade (and thus to the constructed adapter)', () => {
+    const adapter = createSttAdapter('local-whisperlivekit', { source: 'loopback' })
+    expect((adapter as unknown as Record<string, unknown>)['source']).toBe('loopback')
+  })
+
+  it('forwards custom url to the facade', () => {
+    const url = 'ws://127.0.0.1:8001/asr'
+    const adapter = createSttAdapter('local-whisperlivekit', { url })
+    expect((adapter as unknown as Record<string, unknown>)['url']).toBe(url)
+  })
+
+  it('forwards model base/small to the facade', () => {
+    const base = createSttAdapter('local-whisperlivekit', { model: 'base' })
+    const small = createSttAdapter('local-whisperlivekit', { model: 'small' })
+    expect((base as unknown as Record<string, unknown>)['model']).toBe('base')
+    expect((small as unknown as Record<string, unknown>)['model']).toBe('small')
+  })
+
+  it('forwards all three together {source, url, model}', () => {
+    const adapter = createSttAdapter('local-whisperlivekit', {
+      source: 'loopback',
+      url: 'ws://127.0.0.1:8001/asr',
+      model: 'small'
+    })
+    const anyAdapter = adapter as unknown as Record<string, unknown>
+    expect(anyAdapter['source']).toBe('loopback')
+    expect(anyAdapter['url']).toBe('ws://127.0.0.1:8001/asr')
+    expect(anyAdapter['model']).toBe('small')
+  })
+
+  it('two adapters with different opts remain independent (no singleton)', () => {
+    const mic = createSttAdapter('local-whisperlivekit', {
+      source: 'mic',
+      url: 'ws://127.0.0.1:8000/asr',
+      model: 'tiny'
+    })
+    const loopback = createSttAdapter('local-whisperlivekit', {
+      source: 'loopback',
+      url: 'ws://127.0.0.1:8001/asr',
+      model: 'base'
+    })
+    expect(mic).not.toBe(loopback)
+    expect((mic as unknown as Record<string, unknown>)['source']).toBe('mic')
+    expect((loopback as unknown as Record<string, unknown>)['source']).toBe('loopback')
+    expect((mic as unknown as Record<string, unknown>)['url']).toBe('ws://127.0.0.1:8000/asr')
+    expect((loopback as unknown as Record<string, unknown>)['url']).toBe('ws://127.0.0.1:8001/asr')
+    expect((mic as unknown as Record<string, unknown>)['model']).toBe('tiny')
+    expect((loopback as unknown as Record<string, unknown>)['model']).toBe('base')
+  })
+
+  it('throws on invalid source / url / model', () => {
+    expect(() =>
+      createSttAdapter('local-whisperlivekit', { source: 'bad' as unknown as 'mic' })
+    ).toThrow(/unsupported source/)
+    expect(() => createSttAdapter('local-whisperlivekit', { url: 'http://example.com' })).toThrow(
+      /invalid url/
+    )
+    expect(() =>
+      createSttAdapter('local-whisperlivekit', { model: 'huge' as unknown as 'tiny' })
+    ).toThrow(/unsupported model/)
+  })
+
+  it('WhisperLiveKitSttAdapter directly stores source/url/model (step-6 seam)', () => {
+    class NoopTransport implements WsTransport {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      onMessage(): void {}
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      async connect(): Promise<void> {}
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      send(): void {}
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      async close(): Promise<void> {}
+    }
+    const a = new WhisperLiveKitSttAdapter({
+      source: 'loopback',
+      url: 'ws://127.0.0.1:8001/asr',
+      model: 'base',
+      transport: new NoopTransport()
+    })
+    expect(a.source).toBe('loopback')
+    expect(a.url).toBe('ws://127.0.0.1:8001/asr')
+    expect(a.model).toBe('base')
+    const b = new WhisperLiveKitSttAdapter({ transport: new NoopTransport() })
+    expect(b.source).toBe('mic')
+    expect(b.model).toBe('tiny')
+    expect(b.url).toBe('ws://127.0.0.1:8000/asr')
   })
 })

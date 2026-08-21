@@ -5,11 +5,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, createOverlayWindow } from './windows'
 import { registerIpcHandlers } from './settings-store'
 import { createPcmSink, feedWavToAdapter, toFiniteFloat32 } from './capture/audio-input'
-import {
-  computeRms,
-  energyCapturedFor,
-  writeLoopbackCheck
-} from './capture/loopback-energy'
+import { computeRms, energyCapturedFor, writeLoopbackCheck } from './capture/loopback-energy'
 import { createSttAdapter } from '../shared/stt/stt-adapter'
 import { labelForSource } from '../shared/stt/speaker-label'
 import type { TranscriptEvent } from '../shared/types'

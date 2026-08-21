@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  WhisperLiveKitSttAdapter,
-  type WsTransport
-} from '../src/main/stt/whisper-livekit'
+import { WhisperLiveKitSttAdapter, type WsTransport } from '../src/main/stt/whisper-livekit'
 import { createSttAdapter } from '../src/shared/stt/stt-adapter'
 import rawFixture from './fixtures/wlk-messages.json'
 
@@ -84,7 +81,11 @@ describe('WhisperLiveKitSttAdapter', () => {
       { kind: 'partial', text: 'Testing 1', seq: 0 },
       { kind: 'partial', text: 'Testing 1, 2, 3', seq: 0 },
       { kind: 'final', text: 'testing 1, 2, 3. This is the Vero meeting transcription', seq: 0 },
-      { kind: 'final', text: 'testing 1, 2, 3. This is the Vero meeting transcription test', seq: 1 }
+      {
+        kind: 'final',
+        text: 'testing 1, 2, 3. This is the Vero meeting transcription test',
+        seq: 1
+      }
     ])
     // 4 events from 14 messages: control/no-text messages emit nothing.
     expect(events).toHaveLength(4)

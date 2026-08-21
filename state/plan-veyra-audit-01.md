@@ -145,7 +145,7 @@ have to break it.
   so rather than appear hung. Tests: reducer/state-mapping unit tests for the
   status chip. Verify: `npm test`. Commit.
 
-- [ ] 6. **Make the STT factory injectable.** (needs: 1) `createSttAdapter` in
+- [x] 6. **Make the STT factory injectable.** (needs: 1) `createSttAdapter` in
   `src/shared/stt/stt-adapter.ts` takes no options and always constructs
   `new WhisperLiveKitSttAdapter()` (`createLazyLocalAdapter`, `:71`), so both
   the mic and loopback adapters are built with `source: 'mic'` and the default

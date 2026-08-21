@@ -122,8 +122,6 @@ describe('settings-store', () => {
       _event: unknown,
       payload: unknown
     ) => Settings
-    expect(() => saveHandler({}, { apiKey: 42 })).toThrow(
-      'settings:save payload failed validation'
-    )
+    expect(() => saveHandler({}, { apiKey: 42 })).toThrow('settings:save payload failed validation')
   })
 })

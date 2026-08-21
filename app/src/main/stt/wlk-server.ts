@@ -280,7 +280,9 @@ export class WlkServer {
         if (!this.child) {
           settled = true
           rejectReady(
-            new Error(`wlk-server: process exited before ${this.wsUrl} accepted a connection\n${this.lastLogs()}`)
+            new Error(
+              `wlk-server: process exited before ${this.wsUrl} accepted a connection\n${this.lastLogs()}`
+            )
           )
           return
         }

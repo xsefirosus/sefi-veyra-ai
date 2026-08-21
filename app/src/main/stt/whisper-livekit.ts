@@ -122,6 +122,8 @@ export class NodeWsTransport implements WsTransport {
   }
 }
 
+export type SttModel = 'tiny' | 'base' | 'small'
+
 export interface WhisperLiveKitSttAdapterOptions {
   /** Injectable socket seam; defaults to the real NodeWsTransport. */
   transport?: WsTransport
@@ -129,12 +131,15 @@ export interface WhisperLiveKitSttAdapterOptions {
   url?: string
   /** Capture track tag passed to the context parser ('mic' | 'loopback'). */
   source?: 'mic' | 'loopback'
+  /** STT model identifier threaded from settings (tiny|base|small). */
+  model?: SttModel
 }
 
 export class WhisperLiveKitSttAdapter implements SttAdapter {
   private readonly transport: WsTransport
   readonly url: string
   readonly source: 'mic' | 'loopback'
+  readonly model: SttModel
   private partialCb: ((text: string, seq: number) => void) | null = null
   private finalCb: ((text: string, seq: number) => void) | null = null
   private errorCb: ((err: Error) => void) | null = null
@@ -144,9 +149,24 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
   private closed = false
 
   constructor(opts: WhisperLiveKitSttAdapterOptions = {}) {
+    if (opts.source !== undefined && opts.source !== 'mic' && opts.source !== 'loopback') {
+      throw new Error(`whisper-livekit: unsupported source "${String(opts.source)}"`)
+    }
+    if (
+      opts.model !== undefined &&
+      opts.model !== 'tiny' &&
+      opts.model !== 'base' &&
+      opts.model !== 'small'
+    ) {
+      throw new Error(`whisper-livekit: unsupported model "${String(opts.model)}"`)
+    }
+    if (opts.url !== undefined && typeof opts.url === 'string' && !/^wss?:\/\//.test(opts.url)) {
+      throw new Error(`whisper-livekit: invalid url "${opts.url}" (expected ws:// or wss://)`)
+    }
     this.transport = opts.transport ?? new NodeWsTransport()
     this.url = opts.url ?? `ws://${WLK_DEFAULT_HOST}:${WLK_DEFAULT_PORT}${WLK_WS_PATH}`
     this.source = opts.source ?? 'mic'
+    this.model = opts.model ?? 'tiny'
     this.transport.onMessage((data) => this.handleMessage(data))
   }
 

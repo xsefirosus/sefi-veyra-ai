@@ -16,6 +16,34 @@
 
 export type SttProvider = 'local-whisperlivekit' | 'cloud-deepgram' | 'cloud-assemblyai'
 
+export type SttModel = 'tiny' | 'base' | 'small'
+
+export interface SttAdapterOptions {
+  /** Capture track tag; defaults to 'mic'. */
+  source?: 'mic' | 'loopback'
+  /** wlk /asr endpoint; defaults to ws://127.0.0.1:8000/asr. */
+  url?: string
+  /** STT model identifier (tiny|base|small); defaults to 'tiny'. */
+  model?: SttModel
+}
+
+function validateAdapterOptions(opts: SttAdapterOptions): void {
+  if (opts.source !== undefined && opts.source !== 'mic' && opts.source !== 'loopback') {
+    throw new Error(`stt-adapter: unsupported source "${String(opts.source)}"`)
+  }
+  if (
+    opts.model !== undefined &&
+    opts.model !== 'tiny' &&
+    opts.model !== 'base' &&
+    opts.model !== 'small'
+  ) {
+    throw new Error(`stt-adapter: unsupported model "${String(opts.model)}"`)
+  }
+  if (opts.url !== undefined && typeof opts.url === 'string' && !/^wss?:\/\//.test(opts.url)) {
+    throw new Error(`stt-adapter: invalid url "${opts.url}" (expected ws:// or wss://)`)
+  }
+}
+
 /**
  * Streaming speech-to-text adapter contract.
  *
@@ -35,10 +63,15 @@ export interface SttAdapter {
 
 const NOT_IMPLEMENTED_MESSAGE = 'not implemented in this pass'
 
-export function createSttAdapter(provider: SttProvider): SttAdapter {
+export function createSttAdapter(provider: SttProvider, opts: SttAdapterOptions = {}): SttAdapter {
+  validateAdapterOptions(opts)
   if (provider === 'local-whisperlivekit') {
     // Step 16 (src/main/stt/whisper-livekit.ts), loaded lazily -- see below.
-    return createLazyLocalAdapter()
+    // Step 6: thread {source, url, model} through factory and lazy facade so
+    // per-track adapters (mic vs loopback) and per-model wlk servers can be
+    // selected, and the step-7 fallback (second wlk on another port) is a config
+    // change rather than a rewrite.
+    return createLazyLocalAdapter(opts)
   }
   // Every non-local provider is a cloud seam this pass: throwing here is the
   // declared contract until a later phase implements them. If a new provider is
@@ -61,19 +94,20 @@ export function createSttAdapter(provider: SttProvider): SttAdapter {
  *   - throws on send() before connect() (the real adapter would too);
  *   - close() before any connect() is a no-op.
  */
-function createLazyLocalAdapter(): SttAdapter {
+function createLazyLocalAdapter(opts: SttAdapterOptions = {}): SttAdapter {
   let real: SttAdapter | null = null
   let loading: Promise<SttAdapter> | null = null
   const pending: Array<(adapter: SttAdapter) => void> = []
 
   const getReal = (): Promise<SttAdapter> => {
     loading ??= import('../../main/stt/whisper-livekit').then(
-      (mod) => new mod.WhisperLiveKitSttAdapter()
+      (mod) =>
+        new mod.WhisperLiveKitSttAdapter({ source: opts.source, url: opts.url, model: opts.model })
     )
     return loading
   }
 
-  return {
+  const facade: SttAdapter = {
     async connect(): Promise<void> {
       const adapter = await getReal()
       while (pending.length > 0) {
@@ -107,4 +141,15 @@ function createLazyLocalAdapter(): SttAdapter {
       if (real) await real.close()
     }
   }
+
+  // Expose threaded options on the facade for test inspection and for callers
+  // that need to observe per-track configuration without awaiting connect().
+  // The real adapter receives the same opts at construction (see getReal).
+  Object.defineProperties(facade, {
+    source: { value: opts.source ?? 'mic', enumerable: true },
+    url: { value: opts.url, enumerable: true, writable: true },
+    model: { value: opts.model ?? 'tiny', enumerable: true }
+  })
+
+  return facade
 }
