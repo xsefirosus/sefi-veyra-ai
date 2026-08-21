@@ -10,6 +10,24 @@ const api = {
   // apiKey is safeStorage-encrypted in veyra-settings.json under userData.
   saveSettings: (settings: Settings): Promise<Settings> =>
     ipcRenderer.invoke('settings:save', settings),
+  // Step 3: CaptureSession lifecycle -- renderer requests start/stop and observes state
+  startSession: (settings: Settings): Promise<{ state: string; lastError: string | null }> =>
+    ipcRenderer.invoke('session:start', settings),
+  stopSession: (): Promise<{ state: string; lastError: string | null }> =>
+    ipcRenderer.invoke('session:stop'),
+  getSessionState: (): Promise<{ state: string; lastError: string | null }> =>
+    ipcRenderer.invoke('session:state'),
+  onSessionState: (
+    cb: (state: { state: string; lastError: string | null }) => void
+  ): (() => void) => {
+    const listener = (_event: unknown, payload: unknown): void => {
+      cb(payload as { state: string; lastError: string | null })
+    }
+    ipcRenderer.on('session-state', listener)
+    return () => {
+      ipcRenderer.removeListener('session-state', listener)
+    }
+  },
   // Step 17: mic capture ships 16 kHz Float32Array chunks to main over the
   // 'pcm' channel; main validates + converts to int16 and calls adapter.send.
   sendPcm: (chunk: Float32Array): void => ipcRenderer.send('pcm', chunk),

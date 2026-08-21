@@ -6,6 +6,7 @@ import { createMainWindow, createOverlayWindow } from './windows'
 import { registerIpcHandlers } from './settings-store'
 import { createPcmSink, feedWavToAdapter, toFiniteFloat32 } from './capture/audio-input'
 import { computeRms, energyCapturedFor, writeLoopbackCheck } from './capture/loopback-energy'
+import { CaptureSession } from './capture/capture-session'
 import { createSttAdapter } from '../shared/stt/stt-adapter'
 import { labelForSource } from '../shared/stt/speaker-label'
 import type { TranscriptEvent } from '../shared/types'
@@ -19,6 +20,194 @@ let overlayWindow: BrowserWindow | null = null
 
 function broadcastTranscript(event: TranscriptEvent): void {
   broadcastTranscriptEvent([mainWindow, overlayWindow], event)
+}
+
+// Step 3: CaptureSession owns the full ordered lifecycle (wlk spawn -> adapter
+// connect -> capture start -> teardown). One state machine
+// idle|starting|listening|stopping|error that both windows observe on
+// 'session-state'.
+let captureSession: CaptureSession | null = null
+let micSink: ((chunk: unknown) => void) | null = null
+let loopbackSink: ((chunk: unknown) => void) | null = null
+
+const SESSION_STATE_CHANNEL = 'session-state'
+const NOT_LISTENING_WARN_THROTTLE_MS = 2000
+let lastNotListeningWarnMs = 0
+
+function warnNotListening(source: string): void {
+  const now = Date.now()
+  if (now - lastNotListeningWarnMs > NOT_LISTENING_WARN_THROTTLE_MS) {
+    lastNotListeningWarnMs = now
+    console.warn(
+      `[capture] pcm ${source} dropped: session not listening (state=${captureSession?.state ?? 'idle'})`
+    )
+  }
+}
+
+function broadcastSessionState(): void {
+  const state = captureSession?.state ?? 'idle'
+  const lastError = captureSession?.lastError?.message ?? null
+  const payload = { state, lastError }
+  for (const w of [mainWindow, overlayWindow] as const) {
+    if (w && !w.isDestroyed()) {
+      w.webContents.send(SESSION_STATE_CHANNEL, payload)
+    }
+  }
+}
+
+function ensureCaptureSession(): CaptureSession {
+  if (captureSession) return captureSession
+  captureSession = new CaptureSession()
+  captureSession.onStateChange(() => broadcastSessionState())
+  return captureSession
+}
+
+function wireAdapterEvents(
+  adapter: {
+    onPartial?: (cb: (text: string, seq: number) => void) => void
+    onFinal?: (cb: (text: string, seq: number) => void) => void
+    onError?: (cb: (err: Error) => void) => void
+  },
+  source: TranscriptEvent['source']
+): void {
+  const speaker = labelForSource(source)
+  adapter.onPartial?.((text, seq) => {
+    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
+  })
+  adapter.onFinal?.((text, seq) => {
+    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
+  })
+  adapter.onError?.((err) => {
+    console.error(`[capture] STT adapter error (${source}):`, err)
+  })
+}
+
+function wireSessionAdapters(session: CaptureSession): void {
+  micSink = null
+  loopbackSink = null
+  const mic = session.micAdapter
+  const loopback = session.loopbackAdapter
+  if (mic) {
+    // Cast to include SttAdapter surface for createPcmSink
+    micSink = createPcmSink(mic as unknown as Parameters<typeof createPcmSink>[0])
+    wireAdapterEvents(mic, 'mic')
+  }
+  if (loopback) {
+    loopbackSink = createPcmSink(loopback as unknown as Parameters<typeof createPcmSink>[0])
+    wireAdapterEvents(loopback, 'loopback')
+  }
+  // Legacy single-adapter fallback (tests): micAdapter already covers it
+  if (!mic && !loopback) {
+    const legacy = (session as unknown as { adapter: unknown }).adapter as {
+      onPartial?: (cb: (text: string, seq: number) => void) => void
+      onFinal?: (cb: (text: string, seq: number) => void) => void
+      onError?: (cb: (err: Error) => void) => void
+    } | null
+    if (legacy) {
+      // No sink in test environment, but wire events if needed
+    }
+  }
+}
+
+function setupPcmHandlers(): void {
+  ipcMain.on('pcm', (_event, chunk: unknown) => {
+    if (!captureSession || captureSession.state !== 'listening' || !micSink) {
+      warnNotListening('mic')
+      return
+    }
+    try {
+      micSink(chunk)
+    } catch (err) {
+      console.error('[capture] rejected PCM chunk:', err instanceof Error ? err.message : err)
+    }
+  })
+
+  ipcMain.on('pcm-loopback', (_event, chunk: unknown) => {
+    if (!captureSession || captureSession.state !== 'listening' || !loopbackSink) {
+      warnNotListening('loopback')
+      return
+    }
+    try {
+      loopbackSink(chunk)
+    } catch (err) {
+      console.error('[loopback] rejected PCM chunk:', err instanceof Error ? err.message : err)
+    }
+  })
+}
+
+function setupSessionIpc(): void {
+  const session = ensureCaptureSession()
+
+  ipcMain.handle('session:start', async (_event, settings: unknown) => {
+    // Trust boundary: validate settings shape before delegating
+    const s = settings as { sttModel?: unknown }
+    if (!s || typeof s.sttModel !== 'string') {
+      throw new Error('session:start: settings.sttModel is required')
+    }
+    try {
+      await session.start(s as { sttModel: 'tiny' | 'base' | 'small' })
+      wireSessionAdapters(session)
+      broadcastSessionState()
+      return { state: session.state, lastError: null }
+    } catch (err) {
+      broadcastSessionState()
+      throw err
+    }
+  })
+
+  ipcMain.handle('session:stop', async () => {
+    if (!captureSession) return { state: 'idle', lastError: null }
+    try {
+      await captureSession.stop()
+      micSink = null
+      loopbackSink = null
+      broadcastSessionState()
+      return { state: captureSession.state, lastError: null }
+    } catch (err) {
+      broadcastSessionState()
+      throw err
+    }
+  })
+
+  ipcMain.handle('session:state', async () => {
+    return {
+      state: captureSession?.state ?? 'idle',
+      lastError: captureSession?.lastError?.message ?? null
+    }
+  })
+}
+
+/**
+ * VEYRA_TEST_AUDIO seam (steps 21-22): when the env var names a WAV path,
+ * that file is fed through adapter.send instead of renderer PCM. Kept
+ * unchanged from the step-17 bridge so the harness path does not regress.
+ * Independent of the CaptureSession (own adapter, own lifecycle).
+ */
+async function handleTestAudio(): Promise<void> {
+  const testAudio = process.env['VEYRA_TEST_AUDIO']
+  if (!testAudio) return
+  const adapter = createSttAdapter('local-whisperlivekit')
+  const source: TranscriptEvent['source'] = 'mic'
+  const speaker: TranscriptEvent['speaker'] = labelForSource(source)
+  adapter.onPartial((text, seq) => {
+    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
+  })
+  adapter.onFinal((text, seq) => {
+    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
+  })
+  adapter.onError((err) => {
+    console.error('[capture] STT adapter error:', err)
+  })
+  try {
+    await adapter.connect()
+    const { samples, chunks } = await feedWavToAdapter(testAudio, adapter)
+    await adapter.close()
+    console.log(
+      `[capture] VEYRA_TEST_AUDIO: fed ${samples} samples in ${chunks} chunks from ${testAudio}`
+    )
+  } catch (err) {
+    console.error('[capture] VEYRA_TEST_AUDIO failed:', err instanceof Error ? err.message : err)
+  }
 }
 
 /**
@@ -67,60 +256,6 @@ function launchWindows(): void {
   if (process.env['VEYRA_SMOKE'] === '1') armSmoke(mainWindow, overlayWindow)
 }
 
-/**
- * Step 17 capture bridge. Two jobs, both routed through the SAME adapter.send
- * path (the step-16 WhisperLiveKitSttAdapter s16le framing):
- *  1. 'pcm' IPC handler: renderer mic chunks (16 kHz Float32Array) -> validated
- *     -> float32ToInt16 -> adapter.send. The renderer is a trust boundary, so
- *     the sink throws on malformed chunks; the error is logged, never swallowed
- *     silently and never allowed to crash the main process.
- *  2. VEYRA_TEST_AUDIO seam (steps 21-22): when the env var names a WAV path,
- *     that file is fed through adapter.send instead of renderer PCM.
- */
-async function startCaptureBridge(): Promise<void> {
-  const adapter = createSttAdapter('local-whisperlivekit')
-  const sink = createPcmSink(adapter)
-  ipcMain.on('pcm', (_event, chunk: unknown) => {
-    try {
-      sink(chunk)
-    } catch (err) {
-      console.error('[capture] rejected PCM chunk:', err instanceof Error ? err.message : err)
-    }
-  })
-
-  // Step 18: adapter transcript events -> 'transcript-event' to BOTH windows.
-  // The source tag is the capture track (this bridge is the step-17 mic track;
-  // step 19 adds the loopback track as its own adapter + source).
-  // Step 20: labelForSource maps the capture track to the speaker label before
-  // broadcast ('mic' -> 'me'). The reducer also defaults an absent speaker, but
-  // main never leaves it absent on this path.
-  const source: TranscriptEvent['source'] = 'mic'
-  const speaker: TranscriptEvent['speaker'] = labelForSource(source)
-  adapter.onPartial((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
-  })
-  adapter.onFinal((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
-  })
-  adapter.onError((err) => {
-    console.error('[capture] STT adapter error:', err)
-  })
-
-  const testAudio = process.env['VEYRA_TEST_AUDIO']
-  if (testAudio) {
-    try {
-      await adapter.connect()
-      const { samples, chunks } = await feedWavToAdapter(testAudio, adapter)
-      await adapter.close()
-      console.log(
-        `[capture] VEYRA_TEST_AUDIO: fed ${samples} samples in ${chunks} chunks from ${testAudio}`
-      )
-    } catch (err) {
-      console.error('[capture] VEYRA_TEST_AUDIO failed:', err instanceof Error ? err.message : err)
-    }
-  }
-}
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -136,8 +271,11 @@ app.whenReady().then(() => {
     // NOT started here -- the check is raw-PCM energy, no transcription.
     void startLoopbackCheck()
   } else {
-    void startCaptureBridge()
-    void startLoopbackBridge()
+    setupPcmHandlers()
+    setupSessionIpc()
+    if (process.env['VEYRA_TEST_AUDIO']) {
+      void handleTestAudio()
+    }
   }
 
   // Default open or close DevTools by F12 in development
@@ -191,48 +329,6 @@ function registerDisplayMediaHandler(): void {
       console.error('[loopback] getSources failed:', err instanceof Error ? err.message : err)
       callback({})
     }
-  })
-}
-
-/**
- * Step 19 loopback bridge -- the dual-track SECOND wlk session (plan decision
- * 6). Mirror of startCaptureBridge (step 17/18): 'pcm-loopback' IPC chunks ->
- * the SAME createPcmSink validation -> a SECOND adapter instance from the
- * factory (createSttAdapter builds a fresh lazy facade per call, and
- * WhisperLiveKitSttAdapter keeps all state per-instance -- verified in
- * tests/whisper-livekit.test.ts), whose events are tagged source 'loopback' at
- * this capture site (same pattern as the mic bridge's 'mic' tag) and
- * broadcast to BOTH windows.
- *
- * The two adapters both connect to ws://127.0.0.1:8000/asr. Whether wlk
- * accepts two CONCURRENT WS sessions is UNKNOWN (plan risk, recorded); the
- * adapter layer supports two instances; if the server rejects the second
- * session at runtime the plan's fallback (merged single stream) is recorded in
- * state/phase2-demo.json by step 21 -- not resolved in this step because the
- * step-19 verification is raw-PCM energy and never touches wlk.
- */
-function startLoopbackBridge(): void {
-  const adapter = createSttAdapter('local-whisperlivekit')
-  const sink = createPcmSink(adapter)
-  ipcMain.on('pcm-loopback', (_event, chunk: unknown) => {
-    try {
-      sink(chunk)
-    } catch (err) {
-      console.error('[loopback] rejected PCM chunk:', err instanceof Error ? err.message : err)
-    }
-  })
-
-  // Step 20: same labeling as the mic bridge, mapping 'loopback' -> 'other'.
-  const source: TranscriptEvent['source'] = 'loopback'
-  const speaker: TranscriptEvent['speaker'] = labelForSource(source)
-  adapter.onPartial((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'partial', text, seq, ts: Date.now() })
-  })
-  adapter.onFinal((text, seq) => {
-    broadcastTranscript({ source, speaker, kind: 'final', text, seq, ts: Date.now() })
-  })
-  adapter.onError((err) => {
-    console.error('[loopback] STT adapter error:', err)
   })
 }
 

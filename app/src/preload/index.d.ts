@@ -15,6 +15,11 @@ export interface Api {
   onTranscriptEvent: (cb: (event: TranscriptEvent) => void) => () => void
   /** Step 18: 'overlay' for the overlay window, 'main' otherwise. */
   windowRole: WindowRole
+  /** Step 3: CaptureSession lifecycle */
+  startSession: (settings: Settings) => Promise<{ state: string; lastError: string | null }>
+  stopSession: () => Promise<{ state: string; lastError: string | null }>
+  getSessionState: () => Promise<{ state: string; lastError: string | null }>
+  onSessionState: (cb: (state: { state: string; lastError: string | null }) => void) => () => void
 }
 
 declare global {
