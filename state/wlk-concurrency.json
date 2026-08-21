@@ -1,0 +1,49 @@
+{
+  "concurrentSessions": true,
+  "session1Messages": 59,
+  "session2Messages": 72,
+  "note": "one wlk process serves two concurrent /asr sessions; dual-track can share a single WlkServer (port 8000).",
+  "detail": {
+    "createdAt": "2026-08-21T19:38:02.411Z",
+    "model": "tiny",
+    "host": "127.0.0.1",
+    "port": 8000,
+    "wsUrl": "ws://127.0.0.1:8000/asr",
+    "pcmInput": true,
+    "reusedServer": false,
+    "wav": {
+      "path": "D:\\Projects\\Sefi-Veyra-AI\\app\\assets\\test-speech.wav",
+      "sampleRate": 16000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "pcmBytes": 169280,
+      "seconds": 5.29
+    },
+    "session1": {
+      "messages": 59,
+      "testingMatched": true,
+      "gotReadyToStop": true,
+      "sampleMessages": [
+        "{\"status\":\"no_audio_detected\",\"lines\":[],\"buffer_transcription\":\"\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0,\"remaining_time_transcription_processing\":0.0,\"remaining_time_transcription_policy\":0.0,\"remaining_time_diarization\":0}",
+        "{\"status\":\"active_transcription\",\"lines\":[{\"speaker\":-2,\"text\":\"\",\"start\":\"0:00:01.40\",\"end\":\"0:00:02.20\"}],\"buffer_transcription\":\"\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0,\"remaining_time_transcription_processing\":2.1,\"remaining_time_transcription_policy\":0.1,\"remaining_time_diarization\":0}",
+        "{\"status\":\"active_transcription\",\"lines\":[{\"speaker\":-2,\"text\":\"\",\"start\":\"0:00:04.70\",\"end\":\"0:00:05.29\"}],\"buffer_transcription\":\"\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0.2,\"remaining_time_transcription_processing\":5.2,\"remaining_time_transcription_policy\":0.1,\"remaining_time_diarization\":0}"
+      ]
+    },
+    "session2": {
+      "messages": 72,
+      "testingMatched": true,
+      "gotReadyToStop": true,
+      "sampleMessages": [
+        "{\"type\":\"config\",\"useAudioWorklet\":true,\"mode\":\"full\"}",
+        "{\"status\":\"no_audio_detected\",\"lines\":[],\"buffer_transcription\":\"\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0,\"remaining_time_transcription_processing\":0.0,\"remaining_time_transcription_policy\":0.0,\"remaining_time_diarization\":0}",
+        "{\"status\":\"active_transcription\",\"lines\":[{\"speaker\":-2,\"text\":\"\",\"start\":\"0:00:01.40\",\"end\":\"0:00:02.10\"}],\"buffer_transcription\":\"\",\"buffer_diarization\":\"\",\"buffer_translation\":\"\",\"remaining_time_transcription\":0,\"remaining_time_transcription_processing\":2.1,\"remaining_time_transcription_policy\":0.0,\"remaining_time_diarization\":0}"
+      ]
+    },
+    "streamError": null,
+    "ws1Ready": true,
+    "ws2Ready": true,
+    "ws1Error": null,
+    "ws2Error": null,
+    "fallback": null
+  }
+}
