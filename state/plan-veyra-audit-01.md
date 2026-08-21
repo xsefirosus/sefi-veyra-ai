@@ -81,7 +81,7 @@ have to break it.
 
 ## Steps
 
-- [ ] 1. **Make the unit suite environment-independent (fixes the 6 red tests).** (needs: -)
+- [x] 1. **Make the unit suite environment-independent (fixes the 6 red tests).** (needs: -)
   `npm test` currently reports `6 failed | 100 passed`; every failure is
   `wlk-server: venv wlk missing at .../.wlk-venv/bin/wlk`, thrown from
   `wlkBinPath()` at `src/main/stt/wlk-server.ts:97` via the `WlkServer`
