@@ -301,7 +301,7 @@ have to break it.
   and re-enumerate devices post-permission. Verify: `npm run build`; confirm
   each in the step-18 live pass. Commit.
 
-- [ ] 17. **Reshape the LLM seam for Phase 3-4 (declare only, still no Gemini).** (needs: 1)
+- [x] 17. **Reshape the LLM seam for Phase 3-4 (declare only, still no Gemini).** (needs: 1)
   `LlmAdapter.streamSuggestions(ctx)` (`src/shared/llm/llm-adapter.ts`) yields
   whole `Suggestion` objects, takes only `{events, meetingId}`, and has no
   cancellation. Phase 4's own criterion is "sub-3-4 s to first suggestion

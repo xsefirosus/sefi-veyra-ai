@@ -50,3 +50,21 @@ export interface TranscriptEvent {
  * exposes window.api.onTranscriptEvent(cb) over this channel.
  */
 export const TRANSCRIPT_EVENT_CHANNEL = 'transcript-event'
+
+/**
+ * Persona context for Phase 3 ingestion (audit plan step 17) — DECLARED ONLY,
+ * nothing ingests or validates these fields yet. Phase 3 fills them from user
+ * settings/files; Phase 4's LLM prompt assembles them. Every field is optional
+ * because any subset may be present; validation happens at the Phase 3 trust
+ * boundary when real data first enters, not here.
+ */
+export interface PersonaContext {
+  /** The user's resume/CV, as text. */
+  resume?: string
+  /** The job description of the role being discussed, as text. */
+  jobDescription?: string
+  /** Free-form notes the user attached to their persona. */
+  notes?: string[]
+  /** Additional supporting documents, each as raw text. */
+  docs?: string[]
+}
