@@ -66,7 +66,6 @@ function wireAdapterEvents(
   adapter: {
     onPartial?: (cb: (text: string, seq: number) => void) => void
     onFinal?: (cb: (text: string, seq: number) => void) => void
-    onError?: (cb: (err: Error) => void) => void
   },
   source: TranscriptEvent['source']
 ): void {
@@ -93,9 +92,11 @@ function wireAdapterEvents(
       segmentId: `final:${source}:${seq}`
     })
   })
-  adapter.onError?.((err) => {
-    console.error(`[capture] STT adapter error (${source}):`, err)
-  })
+  // Audit step 12: adapter errors are NOT wired here. CaptureSession
+  // registered its own onError at start() and routes failures into the state
+  // machine (fail() -> 'error' + lastError -> broadcastSessionState), and
+  // WhisperLiveKitSttAdapter.onError is a single slot -- registering here
+  // would clobber that routing and swallow the error into this callback again.
 }
 
 function wireSessionAdapters(session: CaptureSession): void {
@@ -111,17 +112,6 @@ function wireSessionAdapters(session: CaptureSession): void {
   if (loopback) {
     loopbackSink = createPcmSink(loopback as unknown as Parameters<typeof createPcmSink>[0])
     wireAdapterEvents(loopback, 'loopback')
-  }
-  // Legacy single-adapter fallback (tests): micAdapter already covers it
-  if (!mic && !loopback) {
-    const legacy = (session as unknown as { adapter: unknown }).adapter as {
-      onPartial?: (cb: (text: string, seq: number) => void) => void
-      onFinal?: (cb: (text: string, seq: number) => void) => void
-      onError?: (cb: (err: Error) => void) => void
-    } | null
-    if (legacy) {
-      // No sink in test environment, but wire events if needed
-    }
   }
 }
 

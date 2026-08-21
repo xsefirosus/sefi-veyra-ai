@@ -154,10 +154,12 @@ export class CaptureSession {
   /**
    * Start a capture session. Validates trust boundary, spawns the wlk server
    * with the requested model, then connects the STT adapter(s). Guards against
-   * double-start: only allowed from `idle`.
+   * double-start: only allowed from `idle` -- or from `error`, where the
+   * previous attempt's refs were all cleared (audit step 12: a failed spawn
+   * must not permanently brick the Start control).
    */
   async start(settings: CaptureSettings): Promise<void> {
-    if (this._state !== 'idle') {
+    if (this._state !== 'idle' && this._state !== 'error') {
       throw new Error(`capture-session: cannot start while ${this._state}`)
     }
     if (!settings || typeof settings.sttModel !== 'string') {
@@ -184,13 +186,21 @@ export class CaptureSession {
       if (this.useLegacy) {
         legacyAdapter = this.createAdapterLegacy!()
         this._adapter = legacyAdapter
+        // Audit step 12: route runtime adapter errors into the state machine
+        // BEFORE connect(), so a socket failure racing the transition (or
+        // dropping later mid-listening) reaches the session-state broadcast
+        // instead of vanishing. WhisperLiveKitSttAdapter.onError is a single
+        // slot -- this wiring is THE owner; callers must not re-register.
+        legacyAdapter.onError?.((err) => this.fail(err))
         await legacyAdapter.connect()
       } else {
         mic = this.createMicAdapter(model)
         this._micAdapter = mic
+        mic.onError?.((err) => this.fail(err))
         await mic.connect()
         loopback = this.createLoopbackAdapter(model)
         this._loopbackAdapter = loopback
+        loopback.onError?.((err) => this.fail(err))
         await loopback.connect()
       }
 
@@ -286,5 +296,27 @@ export class CaptureSession {
       this.emitStateChange()
       throw error
     }
+  }
+
+  /**
+   * Report a runtime adapter/transport error (audit step 12): transition
+   * `listening` -> `error` with lastError and emit a state change, so main's
+   * onStateChange subscription broadcasts {state:'error', lastError} to both
+   * windows and the status chip shows "Error: <message>".
+   *
+   * Guards:
+   * - Only acts from `listening`. Errors during `starting` are owned by
+   *   start()'s own catch (which also tears down partial state); late errors
+   *   after a clean stop must not resurrect an error chip over `idle`.
+   * - Idempotent: the FIRST error wins; later ones do not re-emit duplicate
+   *   broadcasts. Recovery/restart-with-backoff is audit step 13.
+   */
+  fail(err: unknown): void {
+    if (this._state !== 'listening') return
+    const error = err instanceof Error ? err : new Error(String(err))
+    console.error('[capture] session error:', error.message)
+    this._lastError = error
+    this._state = 'error'
+    this.emitStateChange()
   }
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'os'
+import { join, resolve } from 'path'
 import {
   buildWlkCommand,
+  wlkBinPath,
   WLK_DEFAULT_HOST,
   WLK_DEFAULT_PORT,
   WLK_WS_PATH,
@@ -91,5 +94,47 @@ describe('WlkServer lifecycle (no spawn)', () => {
     const server = new WlkServer('tiny')
     ;(server as unknown as { child: unknown }).child = {} as never
     await expect(server.start()).rejects.toThrow(/already started/)
+  })
+})
+
+describe('WlkServer spawn-failure surfacing (audit plan step 12)', () => {
+  /**
+   * Seams under test:
+   * - WLK_BIN env override gets the same existence check as the default venv
+   *   resolution, so a bogus path fails FAST at start() with the path in the
+   *   message -- before any spawn attempt.
+   * - start() rejects promptly instead of hanging in the readiness poll: the
+   *   session must land in `error` (surfaced on the status chip), never sit
+   *   in `starting` for the full 60 s timeout.
+   *
+   * This IS the plan's spawn-failure simulation: a real WlkServer resolving a
+   * nonexistent WLK_BIN exercises the same code path as pressing Start in the
+   * app (CaptureSession.start -> WlkServer.start -> wlkBinPath).
+   */
+  it('start() rejects fast with the missing path when WLK_BIN points nowhere', async () => {
+    const prev = process.env['WLK_BIN']
+    process.env['WLK_BIN'] = resolve(join(tmpdir(), 'veyra-no-such-wlk-dir', 'wlk'))
+    try {
+      const server = new WlkServer('tiny')
+      const t0 = Date.now()
+      await expect(server.start()).rejects.toThrow(/WLK_BIN[\s\S]*missing/)
+      // "Not hung in starting": the rejection must be near-instant. A failure
+      // that only surfaces via the 60 s readiness timeout would exceed this.
+      expect(Date.now() - t0).toBeLessThan(5000)
+    } finally {
+      if (prev === undefined) delete process.env['WLK_BIN']
+      else process.env['WLK_BIN'] = prev
+    }
+  })
+
+  it('wlkBinPath() itself throws with the path for a missing WLK_BIN override', () => {
+    const prev = process.env['WLK_BIN']
+    process.env['WLK_BIN'] = resolve(join(tmpdir(), 'veyra-no-such-wlk-dir', 'wlk'))
+    try {
+      expect(() => wlkBinPath(resolve(tmpdir()))).toThrow(/WLK_BIN/)
+    } finally {
+      if (prev === undefined) delete process.env['WLK_BIN']
+      else process.env['WLK_BIN'] = prev
+    }
   })
 })

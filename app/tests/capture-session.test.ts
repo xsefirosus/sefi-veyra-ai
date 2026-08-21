@@ -48,9 +48,12 @@ function fakeAdapter(
 ): CaptureAdapter & {
   connectCalls: number
   closeCalls: number
+  emitError(err: Error): void
+  hasErrorCb(): boolean
 } {
   let connectCalls = 0
   let closeCalls = 0
+  let errorCb: ((err: Error) => void) | null = null
   return {
     get connectCalls() {
       return connectCalls
@@ -65,6 +68,16 @@ function fakeAdapter(
     async close() {
       closeCalls++
       if (opts.closeImpl) await opts.closeImpl()
+    },
+    onError(cb: (err: Error) => void): void {
+      errorCb = cb
+    },
+    emitError(err: Error): void {
+      if (!errorCb) throw new Error('fakeAdapter: no onError registered')
+      errorCb(err)
+    },
+    hasErrorCb(): boolean {
+      return errorCb !== null
     }
   }
 }
@@ -208,5 +221,138 @@ describe('CaptureSession', () => {
     expect(session.state).toBe('idle')
     await expect(session.stop()).resolves.toBeUndefined()
     expect(session.state).toBe('idle')
+  })
+})
+
+describe('CaptureSession error surfacing (audit plan step 12)', () => {
+  /**
+   * Seams under test:
+   * - A runtime adapter onError while listening transitions the session to
+   *   `error` with lastError set and emits a state change, so main's
+   *   session-state broadcast carries the message to both status chips.
+   * - The session registers onError itself (WhisperLiveKitSttAdapter.onError
+   *   is a single slot) for every adapter it creates, before connect().
+   * - fail() is guarded: ignored outside `listening` (starting-phase errors
+   *   belong to start()'s own catch; late errors must not resurrect an error
+   *   chip after a clean stop), idempotent once in error.
+   * - start() is allowed again from `error` (all refs are cleared there), so
+   *   a failed spawn does not permanently brick the Start button.
+   */
+
+  it('runtime adapter error while listening lands in error with lastError and emits', async () => {
+    const server = fakeServer()
+    const adapter = fakeAdapter()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createAdapter: () => adapter
+    })
+    await session.start({ sttModel: 'tiny' })
+
+    const seen: Array<{ state: string; lastError: Error | null }> = []
+    session.onStateChange((state, lastError) => seen.push({ state, lastError }))
+
+    adapter.emitError(new Error('socket dropped'))
+
+    expect(session.state).toBe('error')
+    expect(session.lastError?.message).toBe('socket dropped')
+    // The broadcast seam: main re-emits exactly this on 'session-state'.
+    expect(seen).toEqual([{ state: 'error', lastError: expect.any(Error) }])
+  })
+
+  it('dual-track: a loopback adapter error also fails the session', async () => {
+    const mic = fakeAdapter()
+    const loopback = fakeAdapter()
+    const server = fakeServer()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createMicAdapter: () => mic,
+      createLoopbackAdapter: () => loopback
+    })
+    await session.start({ sttModel: 'tiny' })
+
+    loopback.emitError(new Error('loopback ws closed'))
+
+    expect(session.state).toBe('error')
+    expect(session.lastError?.message).toBe('loopback ws closed')
+  })
+
+  it('registers onError on each adapter before connect()', async () => {
+    let connectCalls = 0
+    const adapter = fakeAdapter({
+      connectImpl: async () => {
+        connectCalls++
+        // The handler must already be wired when connect() runs, so an async
+        // failure racing the transition is not lost.
+        expect(adapter.hasErrorCb()).toBe(true)
+      }
+    })
+    const session = new CaptureSession({
+      createServer: () => fakeServer(),
+      createAdapter: () => adapter
+    })
+    await session.start({ sttModel: 'tiny' })
+    expect(connectCalls).toBe(1)
+  })
+
+  it('fail() is ignored outside listening (no resurrected error chip after clean stop)', async () => {
+    const server = fakeServer()
+    const adapter = fakeAdapter()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createAdapter: () => adapter
+    })
+    await session.start({ sttModel: 'tiny' })
+    await session.stop()
+
+    adapter.emitError(new Error('late socket error'))
+
+    expect(session.state).toBe('idle')
+    expect(session.lastError).toBeNull()
+  })
+
+  it('fail() is idempotent while in error (second adapter error does not re-emit)', async () => {
+    const server = fakeServer()
+    const mic = fakeAdapter()
+    const loopback = fakeAdapter()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createMicAdapter: () => mic,
+      createLoopbackAdapter: () => loopback
+    })
+    await session.start({ sttModel: 'tiny' })
+
+    const seen: string[] = []
+    session.onStateChange((state) => seen.push(state))
+    mic.emitError(new Error('mic died'))
+    loopback.emitError(new Error('loopback died too'))
+
+    expect(session.state).toBe('error')
+    expect(session.lastError?.message).toBe('mic died')
+    // Only ONE error emission: the first failure wins; no duplicate broadcasts.
+    expect(seen.filter((s) => s === 'error')).toEqual(['error'])
+  })
+
+  it('start() is allowed again from error so a failed spawn does not brick Start', async () => {
+    let attempts = 0
+    const server = fakeServer({
+      startImpl: async () => {
+        attempts++
+        if (attempts === 1) throw new Error('spawn failed')
+      }
+    })
+    const adapter = fakeAdapter()
+    const session = new CaptureSession({
+      createServer: () => server,
+      createAdapter: () => adapter
+    })
+
+    await expect(session.start({ sttModel: 'tiny' })).rejects.toThrow('spawn failed')
+    expect(session.state).toBe('error')
+
+    // User fixes the environment (or wlk recovers) and presses Start again.
+    await session.start({ sttModel: 'tiny' })
+    expect(session.state).toBe('listening')
+    expect(server.startCalls).toBe(2)
+    expect(session.lastError).toBeNull()
   })
 })

@@ -234,7 +234,7 @@ have to break it.
   hydration on mount, save-failure surfaces an error, flag resets. Verify:
   `npm test`. Commit.
 
-- [ ] 12. **Surface STT/session errors to the user.** (needs: 5, 3) Adapter errors are
+- [x] 12. **Surface STT/session errors to the user.** (needs: 5, 3) Adapter errors are
   swallowed into `console.error` in main (`index.ts:110`, `:239`) where no user
   will ever see them; a failed wlk spawn or a dropped socket presents as an app
   that simply shows nothing. Route `adapter.onError` and `CaptureSession` errors

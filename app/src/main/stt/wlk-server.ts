@@ -81,8 +81,20 @@ export interface WlkCommand {
  * Fails fast with a setup hint if the venv binary is missing.
  */
 export function wlkBinPath(anchor: string = __dirname): string {
+  // Audit step 12: the env override gets the SAME existence check as the
+  // default resolution below -- an unchecked bogus WLK_BIN used to sail past
+  // this function and fail later as an async spawn ENOENT with no user-visible
+  // error (the app hung in `starting`). Fail fast here instead.
   const envBin = process.env['WLK_BIN']
-  if (envBin) return resolve(envBin)
+  if (envBin) {
+    const resolved = resolve(envBin)
+    if (!existsSync(resolved)) {
+      throw new Error(
+        `wlk-server: WLK_BIN venv wlk missing at ${resolved} (fix WLK_BIN or run scripts/setup-wlk.ps1)`
+      )
+    }
+    return resolved
+  }
   let dir = anchor
   while (dir !== dirname(dir)) {
     if (existsSync(join(dir, 'package.json'))) break
@@ -186,6 +198,12 @@ export class WlkServer {
     // step-14 probe note.
     args.push('--pcm-input')
     this.logTail = []
+    // Audit step 12: a spawn that cannot even start (bad binary, ENOENT,
+    // EACCES) emits 'error' asynchronously -- with no listener Node turns it
+    // into an uncaught exception, and the readiness poll below would keep
+    // polling until the full timeout because 'exit' never fires. Capture it
+    // so waitForAsr() can reject promptly with the real reason.
+    let spawnError: Error | null = null
     const child = spawn(cmd, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -197,13 +215,16 @@ export class WlkServer {
     this.child = child
     child.stdout?.on('data', (d: Buffer) => this.rememberLog(d))
     child.stderr?.on('data', (d: Buffer) => this.rememberLog(d))
+    child.on('error', (err) => {
+      spawnError = err instanceof Error ? err : new Error(String(err))
+    })
     child.on('exit', () => {
       // The process died on its own; the in-flight poll sees child === null and
       // rejects with the captured log tail. A later shutdown() is a no-op.
       this.child = null
     })
     try {
-      await this.waitForAsr()
+      await this.waitForAsr(() => spawnError)
     } catch (err) {
       await this.shutdown()
       throw err
@@ -255,8 +276,12 @@ export class WlkServer {
    * Poll the /asr WebSocket until a connection is accepted or the deadline
    * passes. Uses the runtime's global WebSocket (Node >= 22 / Electron main);
    * no extra dependency (minimization ladder rung 4).
+   *
+   * `getSpawnError` surfaces an asynchronous spawn failure (audit step 12):
+   * when the child could not be spawned at all, reject immediately with that
+   * error instead of polling a process that will never listen.
    */
-  private waitForAsr(): Promise<void> {
+  private waitForAsr(getSpawnError: () => Error | null = () => null): Promise<void> {
     const deadline = Date.now() + this.startTimeoutMs
     return new Promise((resolveReady, rejectReady) => {
       let settled = false
@@ -277,6 +302,14 @@ export class WlkServer {
 
       const attempt = (): void => {
         if (settled) return
+        const spawnError = getSpawnError()
+        if (spawnError) {
+          settled = true
+          // Node's spawn errors carry the path ("spawn <path> ENOENT"), so
+          // the user sees WHICH binary could not start.
+          rejectReady(new Error(`wlk-server: failed to spawn -- ${spawnError.message}`))
+          return
+        }
         if (!this.child) {
           settled = true
           rejectReady(
