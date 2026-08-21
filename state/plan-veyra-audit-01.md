@@ -109,7 +109,7 @@ have to break it.
   `lastError` set and the server shut down (no orphan process). Verify:
   `npm test` passes. Commit.
 
-- [ ] 3. **Wire the session into main and delete the dead bridge paths.** (needs: 2) In
+- [x] 3. **Wire the session into main and delete the dead bridge paths.** (needs: 2) In
   `src/main/index.ts`, replace `startCaptureBridge`/`startLoopbackBridge` with
   `CaptureSession`. The `ipcMain.on('pcm')`/`'pcm-loopback'` handlers stay
   (same `createPcmSink` trust-boundary validation) but route to the session's
