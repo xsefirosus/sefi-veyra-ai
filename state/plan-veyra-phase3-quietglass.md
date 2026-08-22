@@ -273,7 +273,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   document the choice). Tests: reducer/store coverage. Verify: `npm test`.
  Commit.
 
-- [ ] 14. **Stealth rendering.** `TranscriptPanel.tsx`'s overlay variant (and (needs: 6, 13)
+- [x] 14. **Stealth rendering.** `TranscriptPanel.tsx`'s overlay variant (and (needs: 6, 13)
   the future `AnswerPanel` from step 16) conditionally render the minimal
   "state 4" treatment from the canvas when `stealthMode` is true: no card
   background/border/shadow beyond the faint `oklch(100% 0 0 / 0.22)` wash,

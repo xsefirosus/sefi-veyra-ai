@@ -8,42 +8,61 @@
  * Step 13: subscribes to `settings-changed` broadcasts (same mechanism as
  * `session-state` — see src/main/settings-store.ts for the choice) so the
  * overlay stays in sync with stealthMode/theme changes made in the main
- * window. The actual stealth rendering arrives in step 14; this just keeps
- * the plumbing live.
+ * window. Step 14: the stealth minimal treatment ("state 4" — faint wash,
+ * no icons/labels/buttons, reduced text) is threaded as props to TranscriptPanel
+ * via the same broadcast, proving the real IPC/render seam end-to-end.
  */
 import { useEffect, useState } from 'react'
 import TranscriptPanel from './TranscriptPanel'
 import { useTranscript } from './use-transcript'
 import { useSessionState } from '../session/use-session-state'
+import type { StealthTheme } from './stealth-variant'
 
 function OverlayScreen(): React.JSX.Element {
   const { lines } = useTranscript()
   const sessionStatus = useSessionState()
-  const [stealthMode] = useState(() => {
+  const [stealthMode, setStealthMode] = useState(() => {
     const v = (window as unknown as { api?: { initialStealthMode?: boolean } }).api
       ?.initialStealthMode
     return Boolean(v)
   })
+  const [theme, setTheme] = useState<StealthTheme>(() => {
+    const v = (window as unknown as { api?: { initialTheme?: string } }).api?.initialTheme
+    return v === 'dark' ? 'dark' : 'light'
+  })
 
-  // Keep stealthMode live via settings-changed broadcasts (both windows).
+  // Keep stealthMode + theme live via settings-changed broadcasts (both windows).
   useEffect(() => {
     const maybeApi = (window as unknown as { api?: Window['api'] }).api
     if (!maybeApi?.onSettingsChanged) return
     return maybeApi.onSettingsChanged((s) => {
-      // Step 14 will consume this to switch the minimal treatment. For step 13
-      // we just prove the seam is live — attach to the root dataset so a
-      // visual check or test can observe it without rendering logic.
+      setStealthMode(Boolean(s.stealthMode))
+      if (s.theme === 'dark' || s.theme === 'light') {
+        setTheme(s.theme)
+        document.documentElement.dataset.theme = s.theme
+      }
       document.documentElement.dataset.stealth = s.stealthMode ? '1' : '0'
-      if (s.theme) document.documentElement.dataset.theme = s.theme
     })
   }, [])
 
-  // Prime the dataset from the synchronous initial value.
+  // Prime the dataset from the synchronous initial values.
   useEffect(() => {
     document.documentElement.dataset.stealth = stealthMode ? '1' : '0'
   }, [stealthMode])
 
-  return <TranscriptPanel lines={lines} variant="overlay" sessionStatus={sessionStatus} />
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  return (
+    <TranscriptPanel
+      lines={lines}
+      variant="overlay"
+      sessionStatus={sessionStatus}
+      stealthMode={stealthMode}
+      theme={theme}
+    />
+  )
 }
 
 export default OverlayScreen

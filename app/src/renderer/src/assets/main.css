@@ -554,6 +554,45 @@ body {
   font-weight: 600;
 }
 
+/* Phase 3 step 14: Stealth rendering — minimal "state 4" treatment (canvas).
+   When stealthMode is true, no card beyond the faint oklch(100% 0 0 / 0.22)
+   wash, no border/shadow, no icons/labels/buttons — just text at
+   oklch(24% 0.01 90 / 0.7) light, equivalent dark. Normal keeps the full
+   glass-card from step 6. This class is applied via getStealthOverlayVariant
+   (TranscriptPanel overlay variant) alongside the existing overlay-card. */
+.overlay-card--stealth {
+  background: oklch(100% 0 0 / 0.22);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .overlay-card--stealth {
+  background: oklch(100% 0 0 / 0.22);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.overlay-card--stealth .overlay-line {
+  color: oklch(24% 0.01 90 / 0.7);
+}
+
+:root[data-theme='dark'] .overlay-card--stealth .overlay-line {
+  color: oklch(96% 0.005 90 / 0.7);
+}
+
+.overlay-card--stealth .overlay-empty {
+  color: oklch(24% 0.01 90 / 0.7);
+}
+
+:root[data-theme='dark'] .overlay-card--stealth .overlay-empty {
+  color: oklch(96% 0.005 90 / 0.7);
+}
+
+/* No icons/labels in stealth — speaker tags and any chrome are hidden. */
+.overlay-card--stealth .transcript-speaker {
+  display: none;
+}
+
 /* Step 5: session controls (header bar shared by main) + status chip */
 .session-controls {
   display: flex;

@@ -20,11 +20,14 @@ import type { SessionStatus } from '../session/session-status'
 import { overlayEmptyLabel } from '../session/session-status'
 import { transcriptToText, copyTranscript } from './transcript-copy'
 import { isNearBottom, scrollToBottom } from './auto-scroll'
+import { getStealthOverlayVariant, type StealthTheme } from './stealth-variant'
 
 interface TranscriptPanelProps {
   lines: TranscriptLine[]
   variant: 'panel' | 'overlay'
   sessionStatus?: SessionStatus
+  stealthMode?: boolean
+  theme?: StealthTheme
 }
 
 /** How many of the most recent lines the overlay shows (fits 120px). */
@@ -38,7 +41,9 @@ function SpeakerTag({ speaker }: { speaker: TranscriptLine['speaker'] }): React.
 function TranscriptPanel({
   lines,
   variant,
-  sessionStatus
+  sessionStatus,
+  stealthMode = false,
+  theme = 'light'
 }: TranscriptPanelProps): React.JSX.Element {
   if (variant === 'overlay') {
     const tail = lines.slice(-OVERLAY_TAIL)
@@ -46,15 +51,21 @@ function TranscriptPanel({
       ? overlayEmptyLabel(sessionStatus)
       : 'Idle \u2014 press Start listening'
     const isError = sessionStatus?.state === 'error'
+    const stealth = getStealthOverlayVariant({
+      stealthMode: Boolean(stealthMode),
+      theme: theme === 'dark' ? 'dark' : 'light',
+      hasContent: tail.length > 0
+    })
+    const showChrome = stealth.showChrome
     return (
       <div className="overlay-screen" role="status" aria-live="polite">
-        <div className="overlay-card">
+        <div className={stealth.cardClassName}>
           {tail.length === 0 ? (
             <p className={`overlay-empty ${isError ? 'overlay-empty--error' : ''}`}>{emptyText}</p>
           ) : (
             tail.map((l) => (
               <p key={l.segmentId} className={`overlay-line ${l.kind}`}>
-                <SpeakerTag speaker={l.speaker} />
+                {showChrome ? <SpeakerTag speaker={l.speaker} /> : null}
                 {l.text}
               </p>
             ))
