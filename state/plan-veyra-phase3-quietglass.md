@@ -238,7 +238,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   file surfaces an error instead of silently dropping. Verify: `npm test`.
  Commit.
 
-- [ ] 11. **Assemble `PersonaContext` for future Phase-4 consumption.** A (needs: 7)
+- [x] 11. **Assemble `PersonaContext` for future Phase-4 consumption.** A (needs: 7)
   small pure function (`src/shared/stt/... ` or a new
   `src/shared/llm/persona-context.ts`) that maps `PersonaData` (step 7) to
   the existing `PersonaContext` type (`src/shared/types.ts`, declared in
