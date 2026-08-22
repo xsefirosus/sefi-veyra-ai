@@ -3,10 +3,12 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
 import type { PersonaData } from '../renderer/src/persona/persona-reducer'
 import type { TranscriptEvent } from '../shared/types'
+import type { SuggestionDelta } from '../shared/llm/llm-adapter'
 import {
   resolveInitialStealthMode,
   resolveInitialTheme,
   resolveWindowRole,
+  subscribeSuggestionEvents,
   subscribeTranscriptEvents
 } from './transcript-api'
 
@@ -53,6 +55,10 @@ const api = {
   // unsubscribe fn for React effect cleanup.
   onTranscriptEvent: (cb: (event: TranscriptEvent) => void): (() => void) =>
     subscribeTranscriptEvents(ipcRenderer, cb),
+  // Phase 3 step 15: suggestion deltas (delta/complete from llm-adapter) broadcast
+  // by main to BOTH windows; mirrors onTranscriptEvent's exact pattern.
+  onSuggestionEvent: (cb: (event: SuggestionDelta) => void): (() => void) =>
+    subscribeSuggestionEvents(ipcRenderer, cb),
   // Step 18: which window this renderer belongs to ('overlay' vs 'main'),
   // resolved from the window's additionalArguments (windows.ts).
   windowRole: resolveWindowRole(process.argv),

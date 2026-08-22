@@ -52,6 +52,14 @@ export interface TranscriptEvent {
 export const TRANSCRIPT_EVENT_CHANNEL = 'transcript-event'
 
 /**
+ * IPC channel carrying suggestion deltas from main to the renderers (phase 3
+ * step 15). Mirrors TRANSCRIPT_EVENT_CHANNEL's exact pattern: main broadcasts
+ * SuggestionDelta events (delta/complete from llm-adapter) to BOTH windows;
+ * the preload exposes window.api.onSuggestionEvent(cb) over this channel.
+ */
+export const SUGGESTION_EVENT_CHANNEL = 'suggestion-event'
+
+/**
  * Persona context for Phase 3 ingestion (audit plan step 17) — DECLARED ONLY,
  * nothing ingests or validates these fields yet. Phase 3 fills them from user
  * settings/files; Phase 4's LLM prompt assembles them. Every field is optional

@@ -4,8 +4,9 @@
  * mocking Electron. The preload (index.ts) binds these to the real
  * ipcRenderer and process.argv.
  */
-import { TRANSCRIPT_EVENT_CHANNEL } from '../shared/types'
+import { SUGGESTION_EVENT_CHANNEL, TRANSCRIPT_EVENT_CHANNEL } from '../shared/types'
 import type { TranscriptEvent } from '../shared/types'
+import type { SuggestionDelta } from '../shared/llm/llm-adapter'
 
 /** additionalArguments token that marks the overlay window (windows.ts). */
 export const WINDOW_ROLE_ARG = '--veyra-window=overlay'
@@ -72,5 +73,46 @@ export function subscribeTranscriptEvents(
   ipc.on(TRANSCRIPT_EVENT_CHANNEL, listener)
   return () => {
     ipc.removeListener(TRANSCRIPT_EVENT_CHANNEL, listener)
+  }
+}
+
+/** Shape-guard for suggestion deltas (phase 3 step 15). */
+function isSuggestionDelta(value: unknown): value is SuggestionDelta {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  if (v.type === 'delta') {
+    return (
+      (v.kind === 'action-item' || v.kind === 'summary' || v.kind === 'question') &&
+      typeof v.textDelta === 'string'
+    )
+  }
+  if (v.type === 'complete') {
+    const s = v.suggestion as Record<string, unknown> | undefined
+    return (
+      typeof s === 'object' &&
+      s !== null &&
+      typeof s.text === 'string' &&
+      (s.kind === 'action-item' || s.kind === 'summary' || s.kind === 'question')
+    )
+  }
+  return false
+}
+
+/**
+ * Subscribe to main-process suggestion deltas; returns an unsubscribe fn.
+ * Mirrors subscribeTranscriptEvents's exact pattern (phase 3 step 15).
+ * Malformed payloads are dropped at this trust boundary, never forwarded.
+ */
+export function subscribeSuggestionEvents(
+  ipc: IpcSubscribe,
+  cb: (event: SuggestionDelta) => void
+): () => void {
+  const listener = (_event: unknown, ...args: unknown[]): void => {
+    const event = args[0]
+    if (isSuggestionDelta(event)) cb(event)
+  }
+  ipc.on(SUGGESTION_EVENT_CHANNEL, listener)
+  return () => {
+    ipc.removeListener(SUGGESTION_EVENT_CHANNEL, listener)
   }
 }

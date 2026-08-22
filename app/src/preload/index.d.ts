@@ -2,6 +2,7 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
 import type { PersonaData } from '../renderer/src/persona/persona-reducer'
 import type { TranscriptEvent } from '../shared/types'
+import type { SuggestionDelta } from '../shared/llm/llm-adapter'
 import type { Theme, WindowRole } from './transcript-api'
 
 export interface Api {
@@ -16,6 +17,8 @@ export interface Api {
   loopbackCheckMode: boolean
   /** Step 18: subscribe to main-process transcript events; returns the unsubscribe fn. */
   onTranscriptEvent: (cb: (event: TranscriptEvent) => void) => () => void
+  /** Phase 3 step 15: subscribe to main-process suggestion deltas; returns the unsubscribe fn. */
+  onSuggestionEvent: (cb: (event: SuggestionDelta) => void) => () => void
   /** Step 18: 'overlay' for the overlay window, 'main' otherwise. */
   windowRole: WindowRole
   /** Phase 3 step 3: theme from additionalArguments, available synchronously before React mounts. */

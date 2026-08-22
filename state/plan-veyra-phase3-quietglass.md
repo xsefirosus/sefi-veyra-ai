@@ -286,7 +286,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   logic over markup. Verify: `npm test`; visual check both modes at step 18.
  Commit.
 
-- [ ] 15. **Answer-suggestion IPC + reducer.** New `SUGGESTION_EVENT_CHANNEL` (needs: 1)
+- [x] 15. **Answer-suggestion IPC + reducer.** New `SUGGESTION_EVENT_CHANNEL` (needs: 1)
   broadcast (mirroring `TRANSCRIPT_EVENT_CHANNEL`'s exact pattern in
   `src/shared/types.ts` and `transcript-broadcast.ts`) carrying
   `SuggestionDelta` events (the real type from audit-01 step 17's
