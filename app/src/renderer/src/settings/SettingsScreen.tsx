@@ -23,6 +23,27 @@ import type { CaptureMode } from '../capture/mic-capture'
 
 const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
 
+/* Quiet Glass inline icon set — stroke-based, no icon font, no emoji.
+   Path data copied verbatim from the published canvas Main.dc.html (page "Veyra"). */
+function BrandIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3l7 4v8l-7 4-7-4V7l7-4z" />
+      <path d="M8.5 9.5l3.5 6 3.5-6" />
+    </svg>
+  )
+}
+
 function SunIcon(): React.JSX.Element {
   return (
     <svg
@@ -32,6 +53,8 @@ function SunIcon(): React.JSX.Element {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
     >
       <circle cx="12" cy="12" r="4" />
@@ -49,9 +72,91 @@ function MoonIcon(): React.JSX.Element {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
     >
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
+
+function DocumentIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8M8 17h8" />
+    </svg>
+  )
+}
+
+function UploadIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8l-5-5-5 5" />
+      <path d="M12 3v12" />
+    </svg>
+  )
+}
+
+function EyeOffIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.59 9.59 0 0 0 5.39-1.61" />
+      <path d="M2 2l20 20" />
+    </svg>
+  )
+}
+
+function EyeIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   )
 }
@@ -63,8 +168,10 @@ interface SettingsScreenProps {
 }
 
 /**
- * Direction: restrained (settings form — labels above controls, one accent
- * for the primary action). Governing spec: the plan step 7 (state/plan-veyra-p1p2.md).
+ * Direction: Quiet Glass — per state/plan-veyra-phase3-quietglass.md step 5 and
+ * the published canvas Main.dc.html (page "Veyra").
+ * Rounded 16px cards, pill session-chip, persona-card treatment (border,
+ * padding 24px, soft surface), stroke-based inline icons copied from canvas.
  */
 function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   const [internalSettings, internalDispatch] = useReducer(settingsReducer, initialSettings)
@@ -75,6 +182,7 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
     { deviceId: null, label: 'System default' }
   ])
   const [ui, dispatchUi] = useReducer(settingsUiReducer, initialSettingsUiState)
+  const [showKey, setShowKey] = useState(false)
 
   // Step 11: hydration on mount — a saved key/model/device come back from
   // settings:load (apiKey decrypted in main) instead of the form starting
@@ -197,7 +305,12 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   return (
     <div className="settings">
       <div className="settings-header">
-        <h1 className="settings-title">VEYRA</h1>
+        <div className="settings-brand">
+          <span className="settings-brand-mark" aria-hidden="true">
+            <BrandIcon />
+          </span>
+          <h1 className="settings-title">VEYRA</h1>
+        </div>
         <button
           type="button"
           role="switch"
@@ -218,22 +331,44 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
         </button>
       </div>
       <form
-        className="settings-form"
+        className="settings-form persona-card"
         onSubmit={(e) => {
           e.preventDefault()
           onSave()
         }}
       >
+        <div className="settings-card-head">
+          <span className="settings-card-icon" aria-hidden="true">
+            <DocumentIcon />
+          </span>
+          <span className="settings-card-title">Settings</span>
+        </div>
         <label className="settings-field">
-          <span className="settings-label">Gemini API key</span>
-          <input
-            type="password"
-            value={settings.apiKey}
-            onChange={(e) => edit(setApiKey(e.target.value))}
-            placeholder="Paste your Gemini API key"
-            autoComplete="off"
-            spellCheck={false}
-          />
+          <span className="settings-label">
+            <span className="settings-label-icon" aria-hidden="true">
+              <EyeOffIcon />
+            </span>
+            Gemini API key
+          </span>
+          <span className="settings-input-wrap">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={settings.apiKey}
+              onChange={(e) => edit(setApiKey(e.target.value))}
+              placeholder="Paste your Gemini API key"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="settings-eye-toggle"
+              aria-label={showKey ? 'Hide API key' : 'Show API key'}
+              aria-pressed={showKey}
+              onClick={() => setShowKey((v) => !v)}
+            >
+              {showKey ? <EyeIcon /> : <EyeOffIcon />}
+            </button>
+          </span>
           {ui.keyRestored && (
             <p className="settings-restored" role="status">
               Saved API key loaded (masked)
@@ -242,7 +377,12 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
         </label>
 
         <label className="settings-field">
-          <span className="settings-label">STT model</span>
+          <span className="settings-label">
+            <span className="settings-label-icon" aria-hidden="true">
+              <DocumentIcon />
+            </span>
+            STT model
+          </span>
           <select
             value={settings.sttModel}
             onChange={(e) => edit(setSttModel(e.target.value as SttModel))}
@@ -256,7 +396,12 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
         </label>
 
         <label className="settings-field">
-          <span className="settings-label">Audio device</span>
+          <span className="settings-label">
+            <span className="settings-label-icon" aria-hidden="true">
+              <UploadIcon />
+            </span>
+            Audio device
+          </span>
           <select
             value={settings.audioDeviceId ?? ''}
             onChange={(e) => edit(setAudioDevice(e.target.value === '' ? null : e.target.value))}
@@ -270,6 +415,9 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
         </label>
 
         <button type="submit" className="settings-save">
+          <span className="settings-save-icon" aria-hidden="true">
+            <UploadIcon />
+          </span>
           Save
         </button>
         {captureFallback && (

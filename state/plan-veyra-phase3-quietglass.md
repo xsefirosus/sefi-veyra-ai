@@ -173,7 +173,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   artifact for the exact treatment). Verify: build + visual check. Commit.
 
 
-- [ ] 5. **Restyle Settings screen to Quiet Glass.** Update (needs: 3, 4)
+- [x] 5. **Restyle Settings screen to Quiet Glass.** Update (needs: 3, 4)
   `SettingsScreen.tsx` + `main.css`: rounded-16px cards (`border-radius`),
   the pill-shaped `session-chip`, and the persona-card visual treatment
   (border, padding, spacing) to match the canvas. Add the inline SVG icon
