@@ -488,16 +488,44 @@ body {
 /* Overlay window (frameless, always-on-top, user-movable/resizable): the live
    tail only. Step 16(a): the whole surface is a drag region -- this is how the
    frameless window gets moved; it is not a text-selection surface (the panel
-   is). */
+   is).
+   Step 6 (Quiet Glass): glass treatment -- translucent card
+   (oklch 100% /0.7 + blur 6px, rounded, soft shadow) replacing the plain
+   dark bar, for the Listening/transcript-tail state. Generating/Ready states
+   arrive in step 16. */
 .overlay-screen {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 0.25rem;
   height: 100vh;
-  padding: 0.5rem 0.875rem;
+  padding: 0.5rem;
   overflow: hidden;
+  background: transparent;
   -webkit-app-region: drag;
+}
+
+.overlay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem 0.875rem;
+  background: oklch(100% 0 0 / 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 12px;
+  border: 1px solid oklch(91% 0.006 90 / 0.6);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.08),
+    0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+:root[data-theme='dark'] .overlay-card {
+  background: oklch(22% 0.01 90 / 0.68);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .overlay-line {

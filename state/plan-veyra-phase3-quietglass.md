@@ -183,7 +183,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   markup — copy the exact `<path>` data rather than redrawing). Verify:
  build + visual check against the canvas side by side. Commit.
 
-- [ ] 6. **Restyle the overlay to the glass treatment.** Update (needs: 5)
+- [x] 6. **Restyle the overlay to the glass treatment.** Update (needs: 5)
   `OverlayScreen.tsx`/`TranscriptPanel.tsx`'s overlay variant + `main.css`:
   translucent card (`background: oklch(100% 0 0 / 0.7)`,
   `backdrop-filter: blur(6px)`, rounded corners, soft shadow) replacing the

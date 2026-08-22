@@ -48,16 +48,18 @@ function TranscriptPanel({
     const isError = sessionStatus?.state === 'error'
     return (
       <div className="overlay-screen" role="status" aria-live="polite">
-        {tail.length === 0 ? (
-          <p className={`overlay-empty ${isError ? 'overlay-empty--error' : ''}`}>{emptyText}</p>
-        ) : (
-          tail.map((l) => (
-            <p key={l.segmentId} className={`overlay-line ${l.kind}`}>
-              <SpeakerTag speaker={l.speaker} />
-              {l.text}
-            </p>
-          ))
-        )}
+        <div className="overlay-card">
+          {tail.length === 0 ? (
+            <p className={`overlay-empty ${isError ? 'overlay-empty--error' : ''}`}>{emptyText}</p>
+          ) : (
+            tail.map((l) => (
+              <p key={l.segmentId} className={`overlay-line ${l.kind}`}>
+                <SpeakerTag speaker={l.speaker} />
+                {l.text}
+              </p>
+            ))
+          )}
+        </div>
       </div>
     )
   }

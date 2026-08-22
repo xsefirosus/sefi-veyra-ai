@@ -1,7 +1,9 @@
 /**
- * OverlayScreen (plan step 18): the overlay window's whole screen. Replaces the
- * template's default content with the live transcript: partials in italic/grey,
- * finals solid (TranscriptPanel variant 'overlay').
+ * OverlayScreen (plan step 18, glass restyle step 6): the overlay window's whole
+ * screen. Delegates to TranscriptPanel variant 'overlay' which now renders the
+ * Quiet Glass translucent card (oklch 100% /0.7 + blur 6px, rounded, soft shadow)
+ * for the transcript-tail / Listening state. Generating/Ready states arrive in
+ * step 16.
  */
 import TranscriptPanel from './TranscriptPanel'
 import { useTranscript } from './use-transcript'
