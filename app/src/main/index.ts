@@ -10,7 +10,10 @@ import { CaptureSession } from './capture/capture-session'
 import { createSttAdapter } from '../shared/stt/stt-adapter'
 import { labelForSource } from '../shared/stt/speaker-label'
 import type { TranscriptEvent } from '../shared/types'
-import { broadcastTranscriptEvent } from './transcript/transcript-broadcast'
+import {
+  adapterEventToTranscriptEvent,
+  broadcastTranscriptEvent
+} from './transcript/transcript-broadcast'
 import { float32ToInt16 } from '../shared/audio/format'
 
 // Step 18: the two windows, held at module scope so the capture bridge can
@@ -64,33 +67,24 @@ function ensureCaptureSession(): CaptureSession {
 
 function wireAdapterEvents(
   adapter: {
-    onPartial?: (cb: (text: string, seq: number) => void) => void
-    onFinal?: (cb: (text: string, seq: number) => void) => void
+    onPartial?: (cb: (text: string, seq: number, segmentId?: string) => void) => void
+    onFinal?: (cb: (text: string, seq: number, segmentId?: string) => void) => void
   },
   source: TranscriptEvent['source']
 ): void {
   const speaker = labelForSource(source)
-  adapter.onPartial?.((text, seq) => {
-    broadcastTranscript({
-      source,
-      speaker,
-      kind: 'partial',
-      text,
-      seq,
-      ts: Date.now(),
-      segmentId: `partial:${source}:${seq}`
-    })
+  // Audit step 8 fix (see transcript-broadcast.ts header): use the adapter's
+  // REAL segmentId, not a source:seq fabrication -- that fake id is what
+  // silently broke the duplicate/lost-final-segment fix on this wiring.
+  adapter.onPartial?.((text, seq, segmentId) => {
+    broadcastTranscript(
+      adapterEventToTranscriptEvent(source, speaker, 'partial', text, seq, segmentId)
+    )
   })
-  adapter.onFinal?.((text, seq) => {
-    broadcastTranscript({
-      source,
-      speaker,
-      kind: 'final',
-      text,
-      seq,
-      ts: Date.now(),
-      segmentId: `final:${source}:${seq}`
-    })
+  adapter.onFinal?.((text, seq, segmentId) => {
+    broadcastTranscript(
+      adapterEventToTranscriptEvent(source, speaker, 'final', text, seq, segmentId)
+    )
   })
   // Audit step 12: adapter errors are NOT wired here. CaptureSession
   // registered its own onError at start() and routes failures into the state
@@ -195,27 +189,17 @@ async function handleTestAudio(): Promise<void> {
   const adapter = createSttAdapter('local-whisperlivekit')
   const source: TranscriptEvent['source'] = 'mic'
   const speaker: TranscriptEvent['speaker'] = labelForSource(source)
-  adapter.onPartial((text, seq) => {
-    broadcastTranscript({
-      source,
-      speaker,
-      kind: 'partial',
-      text,
-      seq,
-      ts: Date.now(),
-      segmentId: `partial:${source}:${seq}`
-    })
+  // Audit step 8 fix -- same defect and same fix as wireAdapterEvents above:
+  // use the adapter's real segmentId, not a source:seq fabrication.
+  adapter.onPartial((text, seq, segmentId) => {
+    broadcastTranscript(
+      adapterEventToTranscriptEvent(source, speaker, 'partial', text, seq, segmentId)
+    )
   })
-  adapter.onFinal((text, seq) => {
-    broadcastTranscript({
-      source,
-      speaker,
-      kind: 'final',
-      text,
-      seq,
-      ts: Date.now(),
-      segmentId: `final:${source}:${seq}`
-    })
+  adapter.onFinal((text, seq, segmentId) => {
+    broadcastTranscript(
+      adapterEventToTranscriptEvent(source, speaker, 'final', text, seq, segmentId)
+    )
   })
   adapter.onError((err) => {
     console.error('[capture] STT adapter error:', err)
