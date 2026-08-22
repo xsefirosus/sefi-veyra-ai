@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addAdditionalDoc,
   hydratePersona,
   initialPersona,
   personaReducer,
+  removeAdditionalDoc,
   setJobDescription,
   setNotes,
   setResume
@@ -59,5 +61,58 @@ describe('persona-reducer', () => {
   it('unknown action returns state unchanged', () => {
     const next = personaReducer(initialPersona, { type: 'nope' } as never)
     expect(next).toBe(initialPersona)
+  })
+
+  it('addAdditionalDoc appends to additionalDocs', () => {
+    const doc = { fileName: 'cover.txt', text: 'hello' }
+    const next = personaReducer(initialPersona, addAdditionalDoc(doc))
+    expect(next.additionalDocs).toEqual([doc])
+    // Second add appends, preserving order and existing docs
+    const doc2 = { fileName: 'notes.md', text: '# hi' }
+    const next2 = personaReducer(next, addAdditionalDoc(doc2))
+    expect(next2.additionalDocs).toEqual([doc, doc2])
+  })
+
+  it('addAdditionalDoc rejects malformed doc at trust boundary (no state change)', () => {
+    const bad = { fileName: 123, text: 'hi' } as unknown as { fileName: string; text: string }
+    const next = personaReducer(initialPersona, addAdditionalDoc(bad))
+    expect(next).toBe(initialPersona)
+    expect(next.additionalDocs).toEqual([])
+  })
+
+  it('removeAdditionalDoc removes by index', () => {
+    const withDocs = personaReducer(
+      initialPersona,
+      addAdditionalDoc({ fileName: 'a.txt', text: 'a' })
+    )
+    const withTwo = personaReducer(withDocs, addAdditionalDoc({ fileName: 'b.txt', text: 'b' }))
+    expect(withTwo.additionalDocs).toHaveLength(2)
+    const afterRemoveFirst = personaReducer(withTwo, removeAdditionalDoc(0))
+    expect(afterRemoveFirst.additionalDocs).toEqual([{ fileName: 'b.txt', text: 'b' }])
+    const afterRemoveLast = personaReducer(afterRemoveFirst, removeAdditionalDoc(0))
+    expect(afterRemoveLast.additionalDocs).toEqual([])
+  })
+
+  it('removeAdditionalDoc ignores out-of-bounds index (no state change)', () => {
+    const withOne = personaReducer(
+      initialPersona,
+      addAdditionalDoc({ fileName: 'a.txt', text: 'a' })
+    )
+    const same = personaReducer(withOne, removeAdditionalDoc(5))
+    expect(same).toBe(withOne)
+    const sameNeg = personaReducer(withOne, removeAdditionalDoc(-1))
+    expect(sameNeg).toBe(withOne)
+  })
+
+  it('hydrate replaces additionalDocs, not merges', () => {
+    const withOne = personaReducer(
+      initialPersona,
+      addAdditionalDoc({ fileName: 'a.txt', text: 'a' })
+    )
+    const hydrated = personaReducer(
+      withOne,
+      hydratePersona({ ...initialPersona, additionalDocs: [{ fileName: 'b.txt', text: 'b' }] })
+    )
+    expect(hydrated.additionalDocs).toEqual([{ fileName: 'b.txt', text: 'b' }])
   })
 })

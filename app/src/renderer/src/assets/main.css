@@ -806,6 +806,95 @@ body {
   border-color: var(--ev-c-text-1);
 }
 
+/* Phase 3 step 10: Additional context — removable list + dashed accent Add a file button (Quiet Glass canvas) */
+.persona-additional-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.persona-additional-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--color-background);
+}
+
+.persona-additional-name {
+  font-size: 0.8125rem;
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.persona-additional-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ev-c-text-3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 150ms,
+    color 150ms,
+    border-color 150ms;
+}
+
+.persona-additional-remove:hover {
+  background: var(--color-background-mute);
+  color: var(--ev-c-text-2);
+  border-color: var(--ev-c-gray-2);
+}
+
+.persona-additional-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.persona-add-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.625rem 0.75rem;
+  min-height: 2.5rem;
+  color: var(--accent-ink);
+  background: transparent;
+  border: 1px dashed var(--accent);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.persona-add-file-btn:hover {
+  background: var(--accent-soft);
+}
+
+.persona-add-file-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Phase 3 step 12: Visibility card — overlay opacity slider (Quiet Glass) */
 .visibility-card {
   display: flex;

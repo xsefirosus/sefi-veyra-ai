@@ -229,7 +229,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   (upload a real resume, restart, confirm it reloads) at step 18. Commit.
 
 
-- [ ] 10. **Additional-context files UI.** Extend `PersonaPanel.tsx` with (needs: 9)
+- [x] 10. **Additional-context files UI.** Extend `PersonaPanel.tsx` with (needs: 9)
   the multi-file "Additional context (optional)" section per the canvas:
   a list of attached files (each removable) + an "Add a file" control
   (accent-outlined dashed button, matching the canvas exactly), each file

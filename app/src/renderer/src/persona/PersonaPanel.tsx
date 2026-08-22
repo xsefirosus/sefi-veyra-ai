@@ -1,8 +1,10 @@
 import { useEffect, useReducer } from 'react'
 import {
+  addAdditionalDoc,
   hydratePersona,
   initialPersona,
   personaReducer,
+  removeAdditionalDoc,
   setJobDescription,
   setNotes,
   setResume
@@ -126,6 +128,42 @@ export default function PersonaPanel(): React.JSX.Element {
     saveCurrent({ ...persona, notes: value })
   }
 
+  const onPickAdditionalDoc = (): void => {
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    if (!maybeApi?.pickFile) {
+      dispatchUi({ type: 'pickFailed', message: 'File picker not available' })
+      return
+    }
+    dispatchUi({ type: 'clearPickError' })
+    void maybeApi
+      .pickFile()
+      .then((result) => {
+        if (!result) return // cancelled
+        const doc = { fileName: result.fileName, text: result.text }
+        const next: PersonaData = {
+          ...persona,
+          additionalDocs: [...persona.additionalDocs, doc]
+        }
+        dispatch(addAdditionalDoc(doc))
+        dispatchUi({ type: 'edit' })
+        saveCurrent(next)
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        dispatchUi({ type: 'pickFailed', message: msg })
+      })
+  }
+
+  const onRemoveAdditionalDoc = (index: number): void => {
+    const next: PersonaData = {
+      ...persona,
+      additionalDocs: persona.additionalDocs.filter((_, i) => i !== index)
+    }
+    dispatch(removeAdditionalDoc(index))
+    dispatchUi({ type: 'edit' })
+    saveCurrent(next)
+  }
+
   return (
     <div className="persona-card persona-panel">
       <div className="persona-card-head">
@@ -180,6 +218,40 @@ export default function PersonaPanel(): React.JSX.Element {
           placeholder="Anything else VEYRA should know"
         />
       </label>
+
+      <div className="persona-field">
+        <span className="persona-label">Additional context (optional)</span>
+        {persona.additionalDocs.length > 0 ? (
+          <ul className="persona-additional-list" aria-label="Additional context files">
+            {persona.additionalDocs.map((doc, idx) => (
+              <li key={`${doc.fileName}-${idx}`} className="persona-additional-item">
+                <span className="persona-additional-name" title={doc.fileName}>
+                  {doc.fileName}
+                </span>
+                <button
+                  type="button"
+                  className="persona-additional-remove"
+                  aria-label={`Remove ${doc.fileName}`}
+                  onClick={() => onRemoveAdditionalDoc(idx)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <button type="button" className="persona-add-file-btn" onClick={onPickAdditionalDoc}>
+          <span aria-hidden="true">
+            <UploadIconMini />
+          </span>
+          Add a file
+        </button>
+        {ui.pickError ? (
+          <p className="settings-error" role="alert">
+            {ui.pickError}
+          </p>
+        ) : null}
+      </div>
 
       {ui.saved ? (
         <p className="settings-saved" role="status">
