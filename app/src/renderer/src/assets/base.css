@@ -5,6 +5,9 @@
   --text-1: oklch(24% 0.01 90);
   --text-2: oklch(46% 0.012 90);
   --text-3: oklch(64% 0.01 90);
+  --accent: oklch(56% 0.17 20);
+  --accent-soft: oklch(94% 0.035 20);
+  --accent-ink: oklch(32% 0.13 18);
   --ev-c-white: oklch(100% 0 0);
   --ev-c-white-soft: oklch(98.2% 0.004 90);
   --ev-c-white-mute: oklch(91% 0.006 90);
@@ -36,6 +39,9 @@
   --text-1: oklch(24% 0.01 90);
   --text-2: oklch(46% 0.012 90);
   --text-3: oklch(64% 0.01 90);
+  --accent: oklch(56% 0.17 20);
+  --accent-soft: oklch(94% 0.035 20);
+  --accent-ink: oklch(32% 0.13 18);
   --ev-c-white: oklch(100% 0 0);
   --ev-c-white-soft: oklch(98.2% 0.004 90);
   --ev-c-white-mute: oklch(91% 0.006 90);
@@ -61,6 +67,9 @@
 }
 
 :root[data-theme="dark"] {
+  --accent: oklch(60% 0.18 20);
+  --accent-soft: oklch(27% 0.065 20);
+  --accent-ink: oklch(84% 0.09 18);
   --ev-c-white: #ffffff;
   --ev-c-white-soft: #f8f8f8;
   --ev-c-white-mute: #f2f2f2;

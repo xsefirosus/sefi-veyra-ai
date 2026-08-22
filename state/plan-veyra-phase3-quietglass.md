@@ -159,7 +159,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   gains round-trip coverage for `theme`. Verify: `npm test`. Commit.
 
 
-- [ ] 4. **Red accent tokens + primary button restyle.** Add `--accent`, (needs: 2)
+- [x] 4. **Red accent tokens + primary button restyle.** Add `--accent`, (needs: 2)
   `--accent-soft`, `--accent-ink` to both theme scopes in `base.css` (light:
   the exact oklch triple from "Design source of truth"; dark: derive a
   dark-appropriate red at the same hue, e.g. adjust lightness for the dark
