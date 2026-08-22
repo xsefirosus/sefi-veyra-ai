@@ -4,6 +4,8 @@ import { resolve } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, createOverlayWindow } from './windows'
 import { registerIpcHandlers } from './settings-store'
+import { registerIpcHandlers as registerPersonaHandlers } from './persona/persona-store'
+import { registerDialogHandler } from './persona/dialog'
 import { createPcmSink, feedWavToAdapter, toFiniteFloat32 } from './capture/audio-input'
 import { computeRms, energyCapturedFor, writeLoopbackCheck } from './capture/loopback-energy'
 import { CaptureSession } from './capture/capture-session'
@@ -270,6 +272,8 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.veyra.app')
 
   registerIpcHandlers()
+  registerPersonaHandlers()
+  registerDialogHandler()
   registerDisplayMediaHandler()
   if (process.env['VEYRA_LOOPBACK_CHECK'] === '1') {
     // Step 19 verification (scripts/check-loopback.ps1): capture loopback,

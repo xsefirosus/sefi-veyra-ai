@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
+import type { PersonaData } from '../renderer/src/persona/persona-reducer'
 import type { TranscriptEvent } from '../shared/types'
 import type { Theme, WindowRole } from './transcript-api'
 
@@ -24,6 +25,10 @@ export interface Api {
   stopSession: () => Promise<{ state: string; lastError: string | null }>
   getSessionState: () => Promise<{ state: string; lastError: string | null }>
   onSessionState: (cb: (state: { state: string; lastError: string | null }) => void) => () => void
+  /** Phase 3 step 9: persona persistence + resume picker (main reads + parses via parse-document). */
+  loadPersona: () => Promise<PersonaData>
+  savePersona: (data: PersonaData) => Promise<PersonaData>
+  pickFile: () => Promise<{ fileName: string; text: string } | null>
 }
 
 declare global {

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
+import type { PersonaData } from '../renderer/src/persona/persona-reducer'
 import type { TranscriptEvent } from '../shared/types'
 import { resolveInitialTheme, resolveWindowRole, subscribeTranscriptEvents } from './transcript-api'
 
@@ -53,7 +54,13 @@ const api = {
   // Phase 3 step 3: persisted theme read synchronously from additionalArguments
   // (windows.ts: themeArgument) so the renderer can set data-theme BEFORE
   // first paint, avoiding any flash of the wrong theme.
-  initialTheme: resolveInitialTheme(process.argv)
+  initialTheme: resolveInitialTheme(process.argv),
+  // Phase 3 step 9: persona persistence + resume file picker (main reads + parses via parse-document)
+  loadPersona: (): Promise<PersonaData> => ipcRenderer.invoke('persona:load'),
+  savePersona: (data: PersonaData): Promise<PersonaData> =>
+    ipcRenderer.invoke('persona:save', data),
+  pickFile: (): Promise<{ fileName: string; text: string } | null> =>
+    ipcRenderer.invoke('dialog:pickFile')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

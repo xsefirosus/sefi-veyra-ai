@@ -20,6 +20,7 @@ import {
 } from './settings-persistence'
 import { deviceOptions, type AudioDeviceOption } from './device-options'
 import type { CaptureMode } from '../capture/mic-capture'
+import PersonaPanel from '../persona/PersonaPanel'
 
 const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
 
@@ -432,6 +433,7 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
           </p>
         )}
       </form>
+      <PersonaPanel />
     </div>
   )
 }

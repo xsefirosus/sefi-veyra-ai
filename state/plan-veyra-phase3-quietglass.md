@@ -215,7 +215,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   `app/tests/fixtures/persona/`) proving real extraction, not mocked
  library calls. Verify: `npm test`. Commit.
 
-- [ ] 9. **Resume + job description + notes UI.** New (needs: 5, 7, 8)
+- [x] 9. **Resume + job description + notes UI.** New (needs: 5, 7, 8)
   `src/renderer/src/persona/PersonaPanel.tsx` in the settings screen,
   styled per the canvas's "Your background" card: resume upload (Electron
   `dialog.showOpenDialog` via a new `window.api.pickFile()` bridge → main
