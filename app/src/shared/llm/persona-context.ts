@@ -63,9 +63,7 @@ export function toPersonaContext(data: PersonaData): PersonaContext {
   }
 
   if (Array.isArray(data.additionalDocs) && data.additionalDocs.length > 0) {
-    const docs = data.additionalDocs
-      .map((d) => d.text.trim())
-      .filter((t) => t.length > 0)
+    const docs = data.additionalDocs.map((d) => d.text.trim()).filter((t) => t.length > 0)
     if (docs.length > 0) ctx.docs = docs
   }
 

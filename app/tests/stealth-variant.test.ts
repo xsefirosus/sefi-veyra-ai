@@ -28,7 +28,11 @@ describe('stealth-variant (phase 3 step 14) — pure function mapping stealthMod
   })
 
   it('stealth on, light: faint wash, reduced text at oklch(24% ... / 0.7), no chrome', () => {
-    const v = getStealthOverlayVariant({ stealthMode: true, theme: 'light', content: 'hello world' })
+    const v = getStealthOverlayVariant({
+      stealthMode: true,
+      theme: 'light',
+      content: 'hello world'
+    })
     expect(v.isStealth).toBe(true)
     expect(v.showChrome).toBe(false)
     expect(v.cardClassName).toBe('overlay-card overlay-card--stealth')
@@ -52,9 +56,21 @@ describe('stealth-variant (phase 3 step 14) — pure function mapping stealthMod
 
   it('mapping is stable regardless of content length (empty vs non-empty)', () => {
     const empty = getStealthOverlayVariant({ stealthMode: true, theme: 'light', content: '' })
-    const filled = getStealthOverlayVariant({ stealthMode: true, theme: 'light', content: 'some transcript tail' })
-    const byFlagEmpty = getStealthOverlayVariant({ stealthMode: true, theme: 'light', hasContent: false })
-    const byFlagFull = getStealthOverlayVariant({ stealthMode: true, theme: 'light', hasContent: true })
+    const filled = getStealthOverlayVariant({
+      stealthMode: true,
+      theme: 'light',
+      content: 'some transcript tail'
+    })
+    const byFlagEmpty = getStealthOverlayVariant({
+      stealthMode: true,
+      theme: 'light',
+      hasContent: false
+    })
+    const byFlagFull = getStealthOverlayVariant({
+      stealthMode: true,
+      theme: 'light',
+      hasContent: true
+    })
     // Stealth properties are identical irrespective of content presence
     expect(empty.isStealth).toBe(filled.isStealth)
     expect(empty.textColor).toBe(filled.textColor)

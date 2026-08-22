@@ -130,7 +130,14 @@ export function load(): Settings {
   } catch {
     // First run (no file), corrupt JSON, or a key that no longer decrypts
     // (tampered file / different Windows user): fall back to defaults, never crash.
-    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light', overlayOpacity: 90, stealthMode: false }
+    return {
+      apiKey: '',
+      sttModel: 'tiny',
+      audioDeviceId: null,
+      theme: 'light',
+      overlayOpacity: 90,
+      stealthMode: false
+    }
   }
 }
 

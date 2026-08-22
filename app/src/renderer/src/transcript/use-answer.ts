@@ -8,7 +8,12 @@
  */
 
 import { useEffect, useReducer } from 'react'
-import { answerReducer, initialAnswerState, toAnswerAction, type AnswerState } from './answer-reducer'
+import {
+  answerReducer,
+  initialAnswerState,
+  toAnswerAction,
+  type AnswerState
+} from './answer-reducer'
 import type { SuggestionDelta } from '../../../shared/llm/llm-adapter'
 
 export function useAnswer(): AnswerState {

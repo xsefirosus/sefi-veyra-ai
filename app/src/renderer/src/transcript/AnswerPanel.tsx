@@ -58,7 +58,9 @@ function AnswerPanel({
   onRegenerate
 }: AnswerPanelProps): React.JSX.Element {
   const tail = lines.slice(-OVERLAY_TAIL)
-  const emptyText = sessionStatus ? overlayEmptyLabel(sessionStatus) : 'Idle — press Start listening'
+  const emptyText = sessionStatus
+    ? overlayEmptyLabel(sessionStatus)
+    : 'Idle — press Start listening'
   const isError = sessionStatus?.state === 'error'
   const view: AnswerPanelView = getAnswerPanelView({
     answer,
@@ -110,11 +112,20 @@ function AnswerPanel({
           </p>
         ) : null}
         {/* Suggestion text — selectable, wraps, grows the card continuously */}
-        <p className={`answer-text ${answer.status === 'complete' ? 'answer-text--ready' : 'answer-text--generating'}`}>{view.text}</p>
+        <p
+          className={`answer-text ${answer.status === 'complete' ? 'answer-text--ready' : 'answer-text--generating'}`}
+        >
+          {view.text}
+        </p>
         {/* Ready actions — red accent per step 4, hidden in stealth */}
         {view.mode === 'ready' && view.showCopy ? (
           <div className="answer-actions">
-            <button type="button" className="transcript-copy" onClick={handleCopy} aria-label="Copy suggestion">
+            <button
+              type="button"
+              className="transcript-copy"
+              onClick={handleCopy}
+              aria-label="Copy suggestion"
+            >
               Copy
             </button>
             <span className="transcript-copy-status" role="status" aria-live="polite">

@@ -54,10 +54,7 @@ export type PersonaUiAction =
   | { type: 'pickFailed'; message: string }
   | { type: 'clearPickError' }
 
-export function personaUiReducer(
-  state: PersonaUiState,
-  action: PersonaUiAction
-): PersonaUiState {
+export function personaUiReducer(state: PersonaUiState, action: PersonaUiAction): PersonaUiState {
   switch (action.type) {
     case 'edit':
       return { ...state, saved: false, error: null, pickError: null }

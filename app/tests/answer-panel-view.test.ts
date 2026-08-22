@@ -12,7 +12,12 @@ function complete(text: string): SuggestionDelta {
 
 describe('answer-panel-view (phase 3 step 16) — Listening / Generating / Ready + stealth + growing transition', () => {
   it('Listening (idle): mode listening, no hint, no Copy/Regenerate, card has growing class', () => {
-    const view = getAnswerPanelView({ answer: initialAnswerState, hasTranscriptTail: true, stealthMode: false, theme: 'light' })
+    const view = getAnswerPanelView({
+      answer: initialAnswerState,
+      hasTranscriptTail: true,
+      stealthMode: false,
+      theme: 'light'
+    })
     expect(view.mode).toBe('listening')
     expect(view.text).toBe('')
     expect(view.showHint).toBe(false)
@@ -60,7 +65,11 @@ describe('answer-panel-view (phase 3 step 16) — Listening / Generating / Ready
 
   it('stealth as fourth cross-cutting mode: any mode hides chrome, hint, and buttons, keeps faint wash class', () => {
     // listening + stealth
-    const idleStealth = getAnswerPanelView({ answer: initialAnswerState, stealthMode: true, theme: 'light' })
+    const idleStealth = getAnswerPanelView({
+      answer: initialAnswerState,
+      stealthMode: true,
+      theme: 'light'
+    })
     expect(idleStealth.isStealth).toBe(true)
     expect(idleStealth.showChrome).toBe(false)
     expect(idleStealth.cardClassName).toContain('overlay-card--stealth')
@@ -104,12 +113,20 @@ describe('answer-panel-view (phase 3 step 16) — Listening / Generating / Ready
   })
 
   it('growing card: cardClassName always contains the continuous height transition class regardless of mode', () => {
-    const idle = getAnswerPanelView({ answer: initialAnswerState, stealthMode: false, theme: 'light' })
+    const idle = getAnswerPanelView({
+      answer: initialAnswerState,
+      stealthMode: false,
+      theme: 'light'
+    })
     let gen = answerReducer(initialAnswerState, delta('growing '))
     gen = answerReducer(gen, delta('content '))
     gen = answerReducer(gen, delta('more content that keeps lengthening the card'))
     const generating = getAnswerPanelView({ answer: gen, stealthMode: false, theme: 'light' })
-    const ready = getAnswerPanelView({ answer: answerReducer(gen, complete(gen.text)), stealthMode: false, theme: 'light' })
+    const ready = getAnswerPanelView({
+      answer: answerReducer(gen, complete(gen.text)),
+      stealthMode: false,
+      theme: 'light'
+    })
     for (const v of [idle, generating, ready]) {
       expect(v.cardClassName).toContain('overlay-card--answer')
     }
