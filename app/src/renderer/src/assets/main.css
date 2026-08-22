@@ -593,6 +593,73 @@ body {
   display: none;
 }
 
+/* Phase 3 step 16: Growing overlay answer — three states + stealth fourth.
+   Card height grows continuously with content via CSS height/min-height
+   transition keyed to content length (interpolate-size: allow-keywords lets
+   height:auto animate in supporting browsers), not a hardcoded per-state jump.
+   Delta-by-delta streaming therefore reads as smooth growth, matching
+   "windows progresses bigger as the answers are being generated." */
+.overlay-card--answer {
+  interpolate-size: allow-keywords;
+  transition:
+    min-height 280ms ease,
+    height 280ms ease,
+    padding 220ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease;
+  min-height: 3.25rem;
+}
+
+.answer-hint {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ev-c-text-2);
+  margin-bottom: 0.125rem;
+}
+
+.overlay-card--stealth .answer-hint {
+  display: none;
+}
+
+.answer-text {
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--ev-c-text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.answer-text--generating {
+  color: var(--ev-c-text-1);
+}
+
+.answer-text--ready {
+  color: var(--ev-c-text-1);
+}
+
+.overlay-card--stealth .answer-text {
+  color: oklch(24% 0.01 90 / 0.7);
+}
+
+:root[data-theme='dark'] .overlay-card--stealth .answer-text {
+  color: oklch(96% 0.005 90 / 0.7);
+}
+
+.answer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.overlay-card--stealth .answer-actions {
+  display: none;
+}
+
 /* Step 5: session controls (header bar shared by main) + status chip */
 .session-controls {
   display: flex;

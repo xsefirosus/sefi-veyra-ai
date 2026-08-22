@@ -13,13 +13,15 @@
  * via the same broadcast, proving the real IPC/render seam end-to-end.
  */
 import { useEffect, useState } from 'react'
-import TranscriptPanel from './TranscriptPanel'
+import AnswerPanel from './AnswerPanel'
+import { useAnswer } from './use-answer'
 import { useTranscript } from './use-transcript'
 import { useSessionState } from '../session/use-session-state'
 import type { StealthTheme } from './stealth-variant'
 
 function OverlayScreen(): React.JSX.Element {
   const { lines } = useTranscript()
+  const answer = useAnswer()
   const sessionStatus = useSessionState()
   const [stealthMode, setStealthMode] = useState(() => {
     const v = (window as unknown as { api?: { initialStealthMode?: boolean } }).api
@@ -55,9 +57,9 @@ function OverlayScreen(): React.JSX.Element {
   }, [theme])
 
   return (
-    <TranscriptPanel
+    <AnswerPanel
+      answer={answer}
       lines={lines}
-      variant="overlay"
       sessionStatus={sessionStatus}
       stealthMode={stealthMode}
       theme={theme}

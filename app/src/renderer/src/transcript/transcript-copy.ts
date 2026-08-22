@@ -43,6 +43,15 @@ function minimalDocument(): MinimalDocument | null {
 }
 
 /**
+ * Generic copy for suggestion/answer text (phase 3 step 16 — AnswerPanel
+ * Ready's Copy button). Reuses the same clipboard + legacy fallback pipeline
+ * as copyTranscript but without transcript-specific filtering.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  return copyTranscript(text)
+}
+
+/**
  * Write text to the clipboard; resolves false (never throws) when the async
  * clipboard API is unavailable/refused or the legacy textarea fallback fails.
  */
