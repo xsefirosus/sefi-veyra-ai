@@ -5,6 +5,7 @@ import {
   settingsReducer,
   setApiKey,
   setAudioDevice,
+  setOverlayOpacity,
   setSttModel,
   setTheme
 } from '../src/renderer/src/settings/settings-reducer'
@@ -15,7 +16,8 @@ describe('settings-reducer', () => {
       apiKey: '',
       sttModel: 'tiny',
       audioDeviceId: null,
-      theme: 'light'
+      theme: 'light',
+      overlayOpacity: 90
     })
   })
 
@@ -59,10 +61,27 @@ describe('settings-reducer', () => {
       apiKey: 'k',
       sttModel: 'base' as const,
       audioDeviceId: 'dev-2',
-      theme: 'dark' as const
+      theme: 'dark' as const,
+      overlayOpacity: 75 as const
     }
     const next = settingsReducer(initialSettings, hydrate(persisted))
     expect(next).toEqual(persisted)
+  })
+
+  it('setOverlayOpacity clamps 0-100 and rounds', () => {
+    const to75 = settingsReducer(initialSettings, setOverlayOpacity(75))
+    expect(to75.overlayOpacity).toBe(75)
+    const to200 = settingsReducer(initialSettings, setOverlayOpacity(200))
+    expect(to200.overlayOpacity).toBe(100)
+    const toNeg = settingsReducer(initialSettings, setOverlayOpacity(-5))
+    expect(toNeg.overlayOpacity).toBe(0)
+    const toFloat = settingsReducer(initialSettings, setOverlayOpacity(67.6))
+    expect(toFloat.overlayOpacity).toBe(68)
+  })
+
+  it('setOverlayOpacity handles non-finite input as default 90', () => {
+    const next = settingsReducer(initialSettings, setOverlayOpacity(NaN))
+    expect(next.overlayOpacity).toBe(90)
   })
 
   it('unknown action returns the state unchanged (same reference)', () => {

@@ -249,7 +249,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   consume. Test: given fixture `PersonaData`, assert the mapped
  `PersonaContext` shape. Verify: `npm test`. Commit.
 
-- [ ] 12. **Overlay opacity setting.** Extend `Settings` + (needs: 5)
+- [x] 12. **Overlay opacity setting.** Extend `Settings` + (needs: 5)
   `settings-store.ts` with `overlayOpacity: number` (0-100, default e.g. 90 —
   NOT 65; the canvas's "65%" was illustrative copy for the mockup, pick a
   sane real default and document why). Add the opacity slider to a new

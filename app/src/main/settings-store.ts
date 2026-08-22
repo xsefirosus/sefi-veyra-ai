@@ -28,7 +28,12 @@ export function isSettings(value: unknown): value is Settings {
     typeof v['apiKey'] === 'string' &&
     (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
     (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null) &&
-    (v['theme'] === 'light' || v['theme'] === 'dark')
+    (v['theme'] === 'light' || v['theme'] === 'dark') &&
+    typeof v['overlayOpacity'] === 'number' &&
+    Number.isFinite(v['overlayOpacity']) &&
+    Number.isInteger(v['overlayOpacity']) &&
+    (v['overlayOpacity'] as number) >= 0 &&
+    (v['overlayOpacity'] as number) <= 100
   )
 }
 
@@ -56,35 +61,54 @@ export function load(): Settings {
     const raw = readFileSync(settingsPath(), 'utf8')
     const parsed: unknown = JSON.parse(raw)
     if (!isSettings(parsed)) {
-      // Backward compat: files written before theme existed lack the field.
-      // If the old shape validates, migrate forward with the default theme.
+      // Backward compat: files written before theme/overlayOpacity existed lack
+      // those fields. If the old shape validates, migrate forward with defaults.
+      // overlayOpacity default 90 — sane window legibility, NOT the canvas's
+      // illustrative 65% copy which was a mockup placeholder.
       if (typeof parsed === 'object' && parsed !== null) {
         const v = parsed as Record<string, unknown>
-        const oldValid =
+        const baseValid =
           typeof v['apiKey'] === 'string' &&
           (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
           (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null)
-        if (oldValid) {
-          return {
-            apiKey: decryptApiKey(v['apiKey'] as string),
-            sttModel: v['sttModel'] as Settings['sttModel'],
-            audioDeviceId: v['audioDeviceId'] as string | null,
-            theme: 'light'
+        if (baseValid) {
+          const themeValid = v['theme'] === 'light' || v['theme'] === 'dark'
+          const opacityRaw = v['overlayOpacity']
+          const opacityValid =
+            typeof opacityRaw === 'number' &&
+            Number.isFinite(opacityRaw) &&
+            Number.isInteger(opacityRaw) &&
+            opacityRaw >= 0 &&
+            opacityRaw <= 100
+          // Any combination of missing/invalid new fields -> migrate with defaults
+          // for those fields, but only if the base fields are intact.
+          const theme = themeValid ? (v['theme'] as Settings['theme']) : 'light'
+          const overlayOpacity = opacityValid ? (opacityRaw as number) : 90
+          // If either new field was missing/invalid, treat as migratable.
+          if (!themeValid || !opacityValid) {
+            return {
+              apiKey: decryptApiKey(v['apiKey'] as string),
+              sttModel: v['sttModel'] as Settings['sttModel'],
+              audioDeviceId: v['audioDeviceId'] as string | null,
+              theme,
+              overlayOpacity
+            }
           }
         }
       }
-      return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light' }
+      return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light', overlayOpacity: 90 }
     }
     return {
       apiKey: decryptApiKey(parsed.apiKey),
       sttModel: parsed.sttModel,
       audioDeviceId: parsed.audioDeviceId,
-      theme: parsed.theme
+      theme: parsed.theme,
+      overlayOpacity: parsed.overlayOpacity
     }
   } catch {
     // First run (no file), corrupt JSON, or a key that no longer decrypts
     // (tampered file / different Windows user): fall back to defaults, never crash.
-    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light' }
+    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light', overlayOpacity: 90 }
   }
 }
 
@@ -98,7 +122,8 @@ export function save(settings: Settings): Settings {
     apiKey: encryptApiKey(settings.apiKey),
     sttModel: settings.sttModel,
     audioDeviceId: settings.audioDeviceId,
-    theme: settings.theme
+    theme: settings.theme,
+    overlayOpacity: settings.overlayOpacity
   }
   const file = settingsPath()
   mkdirSync(dirname(file), { recursive: true })

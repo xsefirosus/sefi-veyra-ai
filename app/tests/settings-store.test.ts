@@ -36,7 +36,8 @@ const sample: Settings = {
   apiKey: 'sk-test-secret-key-123',
   sttModel: 'base',
   audioDeviceId: 'dev-1',
-  theme: 'dark'
+  theme: 'dark',
+  overlayOpacity: 90
 }
 
 function fileContent(): string {
@@ -53,7 +54,13 @@ describe('settings-store', () => {
   })
 
   it('load() returns defaults when no file exists yet', () => {
-    expect(load()).toEqual({ apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light' })
+    expect(load()).toEqual({
+      apiKey: '',
+      sttModel: 'tiny',
+      audioDeviceId: null,
+      theme: 'light',
+      overlayOpacity: 90
+    })
   })
 
   it('save() then load() round-trips all fields', () => {
@@ -80,6 +87,7 @@ describe('settings-store', () => {
     expect(content).toContain('"sttModel": "base"')
     expect(content).toContain('"audioDeviceId": "dev-1"')
     expect(content).toContain('"theme": "dark"')
+    expect(content).toContain('"overlayOpacity": 90')
   })
 
   it('theme round-trips and is plaintext', () => {
@@ -104,7 +112,33 @@ describe('settings-store', () => {
     }
     writeFileSync(file, JSON.stringify(oldPayload), 'utf8')
     expect(load().theme).toBe('light')
+    expect(load().overlayOpacity).toBe(90)
     expect(load().apiKey).toBe(sample.apiKey)
+  })
+
+  it('migrates files written before overlayOpacity existed (defaults to 90)', () => {
+    const file = join(mockUserDataDir, SETTINGS_FILE)
+    mkdirSync(dirname(file), { recursive: true })
+    const encrypted = Buffer.from(sample.apiKey, 'utf8').toString('base64')
+    const oldPayload = {
+      apiKey: encrypted,
+      sttModel: sample.sttModel,
+      audioDeviceId: sample.audioDeviceId,
+      theme: 'dark'
+    }
+    writeFileSync(file, JSON.stringify(oldPayload), 'utf8')
+    expect(load().overlayOpacity).toBe(90)
+    expect(load().theme).toBe('dark')
+  })
+
+  it('overlayOpacity round-trips and is plaintext', () => {
+    save({ ...sample, overlayOpacity: 65 })
+    expect(load().overlayOpacity).toBe(65)
+    expect(fileContent()).toContain('"overlayOpacity": 65')
+    save({ ...sample, overlayOpacity: 100 })
+    expect(load().overlayOpacity).toBe(100)
+    save({ ...sample, overlayOpacity: 0 })
+    expect(load().overlayOpacity).toBe(0)
   })
 
   it('save() rejects malformed payloads at the trust boundary', () => {
@@ -119,6 +153,11 @@ describe('settings-store', () => {
     expect(isSettings({ ...sample, audioDeviceId: 42 })).toBe(false)
     expect(isSettings({ ...sample, theme: 'blue' })).toBe(false)
     expect(isSettings({ ...sample, theme: undefined })).toBe(false)
+    expect(isSettings({ ...sample, overlayOpacity: 101 })).toBe(false)
+    expect(isSettings({ ...sample, overlayOpacity: -1 })).toBe(false)
+    expect(isSettings({ ...sample, overlayOpacity: 45.5 })).toBe(false)
+    expect(isSettings({ ...sample, overlayOpacity: '90' as unknown as number })).toBe(false)
+    expect(isSettings({ ...sample, overlayOpacity: undefined as unknown as number })).toBe(false)
     expect(isSettings(null)).toBe(false)
   })
 

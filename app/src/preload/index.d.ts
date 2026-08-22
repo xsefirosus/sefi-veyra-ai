@@ -29,6 +29,8 @@ export interface Api {
   loadPersona: () => Promise<PersonaData>
   savePersona: (data: PersonaData) => Promise<PersonaData>
   pickFile: () => Promise<{ fileName: string; text: string } | null>
+  /** Phase 3 step 12: overlay opacity slider -> main BrowserWindow.setOpacity(value/100). */
+  setOverlayOpacity: (value: number) => Promise<number>
 }
 
 declare global {

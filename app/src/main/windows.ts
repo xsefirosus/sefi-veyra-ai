@@ -136,6 +136,24 @@ export function createOverlayWindow(): BrowserWindow {
   // this Electron/Windows version is recorded in state/overlay-capture-note.md.
   overlay.setContentProtection(true)
 
+  // Step 12: apply persisted overlay opacity on creation (not just on live slider
+  // changes). Default 90 — see settings-store.ts for rationale.
+  // Linux caveat: BrowserWindow.setOpacity() has weaker/no effect on some Linux
+  // window managers (Electron docs). This is a platform caveat, not a bug — same
+  // class as the existing macOS-loopback and Windows-only-scripts caveats. The
+  // call is still made; the WM may ignore it.
+  try {
+    const persisted = loadSettings().overlayOpacity
+    const clamped = Math.round(Math.min(100, Math.max(0, persisted ?? 90)))
+    overlay.setOpacity(clamped / 100)
+  } catch {
+    try {
+      overlay.setOpacity(0.9)
+    } catch {
+      // setOpacity can throw on some WMs; never crash window creation.
+    }
+  }
+
   // Keep the configured window title instead of letting the loaded page <title>
   // override it (the renderer's <title> is 'VEYRA'; the overlay is 'VEYRA Overlay').
   overlay.on('page-title-updated', (event) => event.preventDefault())

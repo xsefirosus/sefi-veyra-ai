@@ -258,6 +258,37 @@ function armSmoke(mainWindow: BrowserWindow, overlay: BrowserWindow): void {
   })
 }
 
+function setupOverlayOpacityIpc(): void {
+  // Step 12: Visibility slider -> main -> BrowserWindow.setOpacity(value/100).
+  // Trust boundary: renderer is untrusted; validate 0-100 integer.
+  // Linux caveat: BrowserWindow.setOpacity() has weaker/no effect on some Linux
+  // window managers (Electron docs). This is a platform caveat, not a bug — same
+  // class as the existing macOS-loopback and Windows-only-scripts caveats. The
+  // call is still made; the WM may ignore it.
+  ipcMain.handle('overlay:set-opacity', (_event, value: unknown): number => {
+    if (
+      typeof value !== 'number' ||
+      !Number.isFinite(value) ||
+      !Number.isInteger(value) ||
+      value < 0 ||
+      value > 100
+    ) {
+      throw new Error('overlay:set-opacity payload failed validation: expected integer 0-100')
+    }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      try {
+        overlayWindow.setOpacity(value / 100)
+      } catch (err) {
+        console.warn(
+          '[overlay] setOpacity failed:',
+          err instanceof Error ? err.message : String(err)
+        )
+      }
+    }
+    return value
+  })
+}
+
 function launchWindows(): void {
   mainWindow = createMainWindow()
   overlayWindow = createOverlayWindow()
@@ -275,6 +306,7 @@ app.whenReady().then(() => {
   registerPersonaHandlers()
   registerDialogHandler()
   registerDisplayMediaHandler()
+  setupOverlayOpacityIpc()
   if (process.env['VEYRA_LOOPBACK_CHECK'] === '1') {
     // Step 19 verification (scripts/check-loopback.ps1): capture loopback,
     // measure RMS, write state/loopback-check.json, quit. The wlk adapters are

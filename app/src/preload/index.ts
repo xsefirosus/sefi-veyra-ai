@@ -60,7 +60,10 @@ const api = {
   savePersona: (data: PersonaData): Promise<PersonaData> =>
     ipcRenderer.invoke('persona:save', data),
   pickFile: (): Promise<{ fileName: string; text: string } | null> =>
-    ipcRenderer.invoke('dialog:pickFile')
+    ipcRenderer.invoke('dialog:pickFile'),
+  // Phase 3 step 12: overlay opacity — slider value 0-100 -> main overlayWindow.setOpacity(value/100)
+  setOverlayOpacity: (value: number): Promise<number> =>
+    ipcRenderer.invoke('overlay:set-opacity', value)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

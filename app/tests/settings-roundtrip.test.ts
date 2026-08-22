@@ -27,7 +27,8 @@ const savedOnDisk: Settings = {
   apiKey: 'AIza-saved-key',
   sttModel: 'base',
   audioDeviceId: 'dev-9',
-  theme: 'light'
+  theme: 'light',
+  overlayOpacity: 90
 }
 
 describe('step 11: hydration on mount', () => {

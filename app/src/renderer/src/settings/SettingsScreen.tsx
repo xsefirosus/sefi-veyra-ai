@@ -4,6 +4,7 @@ import {
   initialSettings,
   setApiKey,
   setAudioDevice,
+  setOverlayOpacity,
   setSttModel,
   setTheme,
   settingsReducer,
@@ -303,6 +304,29 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
     })
   }
 
+  const onOpacityChange = (value: number): void => {
+    const clamped = Math.round(Math.min(100, Math.max(0, value)))
+    edit(setOverlayOpacity(clamped))
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    // Live apply to the overlay window via IPC (approach decision 4:
+    // BrowserWindow.setOpacity). Linux caveat: setOpacity has weaker/no effect
+    // on some Linux window managers (Electron docs) — same class as the
+    // existing macOS-loopback and Windows-only-scripts caveats; the call is
+    // still made.
+    if (maybeApi?.setOverlayOpacity) {
+      void maybeApi.setOverlayOpacity(clamped).catch(() => {
+        // IPC failure (e.g. handler not yet registered) is non-fatal.
+      })
+    }
+    if (maybeApi?.saveSettings) {
+      const nextSettings: Settings = { ...settings, overlayOpacity: clamped }
+      void persistSettings(maybeApi.saveSettings, nextSettings).then((outcome) => {
+        if (outcome.ok) dispatchUi({ type: 'saveOk' })
+        else dispatchUi({ type: 'saveFailed', message: outcome.message })
+      })
+    }
+  }
+
   return (
     <div className="settings">
       <div className="settings-header">
@@ -433,6 +457,38 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
           </p>
         )}
       </form>
+      <div className="persona-card visibility-card">
+        <div className="persona-card-head">
+          <span className="persona-card-icon" aria-hidden="true">
+            <EyeIcon />
+          </span>
+          <span className="persona-card-title">Visibility</span>
+        </div>
+        <div className="visibility-row">
+          <span className="visibility-label">Overlay opacity</span>
+          <span className="visibility-value" aria-live="polite">
+            {settings.overlayOpacity}%
+          </span>
+        </div>
+        <div className="visibility-slider-wrap">
+          <span className="visibility-extreme" aria-hidden="true">
+            Faint
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={settings.overlayOpacity}
+            onChange={(e) => onOpacityChange(Number(e.target.value))}
+            className="visibility-slider"
+            aria-label="Overlay opacity"
+          />
+          <span className="visibility-extreme" aria-hidden="true">
+            Full
+          </span>
+        </div>
+      </div>
       <PersonaPanel />
     </div>
   )
