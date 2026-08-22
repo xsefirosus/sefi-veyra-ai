@@ -5,10 +5,12 @@ import {
   setApiKey,
   setAudioDevice,
   setSttModel,
+  setTheme,
   settingsReducer,
   type Settings,
   type SettingsAction,
-  type SttModel
+  type SttModel,
+  type Theme
 } from './settings-reducer'
 import {
   applyLoadedSettings,
@@ -20,6 +22,39 @@ import { deviceOptions, type AudioDeviceOption } from './device-options'
 import type { CaptureMode } from '../capture/mic-capture'
 
 const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
+
+function SunIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  )
+}
+
+function MoonIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
 
 interface SettingsScreenProps {
   settings?: Settings
@@ -64,6 +99,27 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   const edit = (action: SettingsAction): void => {
     dispatch(action)
     dispatchUi({ type: 'edit' })
+  }
+
+  // Phase 3 step 3: keep the live document attribute in sync with the
+  // reducer's theme (hydrate on mount + toggle). The initial value was
+  // already set BEFORE first paint via preload/additionalArguments
+  // (main.tsx); this effect keeps subsequent changes live.
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme
+  }, [settings.theme])
+
+  const toggleTheme = (): void => {
+    const next: Theme = settings.theme === 'dark' ? 'light' : 'dark'
+    edit(setTheme(next))
+    document.documentElement.dataset.theme = next
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    if (!maybeApi?.saveSettings) return
+    const nextSettings: Settings = { ...settings, theme: next }
+    void persistSettings(maybeApi.saveSettings, nextSettings).then((outcome) => {
+      if (outcome.ok) dispatchUi({ type: 'saveOk' })
+      else dispatchUi({ type: 'saveFailed', message: outcome.message })
+    })
   }
 
   // Audio device list feeds the device <select>. Step 16(e): labels come back
@@ -140,7 +196,27 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
 
   return (
     <div className="settings">
-      <h1 className="settings-title">VEYRA</h1>
+      <div className="settings-header">
+        <h1 className="settings-title">VEYRA</h1>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.theme === 'dark'}
+          aria-label={`Switch to ${settings.theme === 'dark' ? 'light' : 'dark'} theme`}
+          className={`theme-toggle${settings.theme === 'dark' ? ' theme-toggle--dark' : ''}`}
+          onClick={toggleTheme}
+        >
+          <span className="theme-toggle-track" aria-hidden="true">
+            <span className="theme-toggle-icon theme-toggle-icon--sun">
+              <SunIcon />
+            </span>
+            <span className="theme-toggle-icon theme-toggle-icon--moon">
+              <MoonIcon />
+            </span>
+          </span>
+          <span className="theme-toggle-knob" aria-hidden="true" />
+        </button>
+      </div>
       <form
         className="settings-form"
         onSubmit={(e) => {

@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Settings } from '../src/renderer/src/settings/settings-reducer'
 
@@ -35,7 +35,8 @@ const SETTINGS_FILE = 'veyra-settings.json'
 const sample: Settings = {
   apiKey: 'sk-test-secret-key-123',
   sttModel: 'base',
-  audioDeviceId: 'dev-1'
+  audioDeviceId: 'dev-1',
+  theme: 'dark'
 }
 
 function fileContent(): string {
@@ -52,7 +53,7 @@ describe('settings-store', () => {
   })
 
   it('load() returns defaults when no file exists yet', () => {
-    expect(load()).toEqual({ apiKey: '', sttModel: 'tiny', audioDeviceId: null })
+    expect(load()).toEqual({ apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light' })
   })
 
   it('save() then load() round-trips all fields', () => {
@@ -78,6 +79,32 @@ describe('settings-store', () => {
     const content = fileContent()
     expect(content).toContain('"sttModel": "base"')
     expect(content).toContain('"audioDeviceId": "dev-1"')
+    expect(content).toContain('"theme": "dark"')
+  })
+
+  it('theme round-trips and is plaintext', () => {
+    save({ ...sample, theme: 'light' })
+    expect(load().theme).toBe('light')
+    expect(fileContent()).toContain('"theme": "light"')
+    save({ ...sample, theme: 'dark' })
+    expect(load().theme).toBe('dark')
+  })
+
+  it('migrates files written before theme existed (defaults to light)', () => {
+    // Simulate an old file without the theme key — reuse the mocked
+    // userData dir directly (the electron mock already points there).
+    const file = join(mockUserDataDir, SETTINGS_FILE)
+    mkdirSync(dirname(file), { recursive: true })
+    // Replicate the encrypt helper from the electron mock (identity buffer)
+    const encrypted = Buffer.from(sample.apiKey, 'utf8').toString('base64')
+    const oldPayload = {
+      apiKey: encrypted,
+      sttModel: sample.sttModel,
+      audioDeviceId: sample.audioDeviceId
+    }
+    writeFileSync(file, JSON.stringify(oldPayload), 'utf8')
+    expect(load().theme).toBe('light')
+    expect(load().apiKey).toBe(sample.apiKey)
   })
 
   it('save() rejects malformed payloads at the trust boundary', () => {
@@ -90,6 +117,8 @@ describe('settings-store', () => {
     expect(isSettings(sample)).toBe(true)
     expect(isSettings({ ...sample, sttModel: 'huge' })).toBe(false)
     expect(isSettings({ ...sample, audioDeviceId: 42 })).toBe(false)
+    expect(isSettings({ ...sample, theme: 'blue' })).toBe(false)
+    expect(isSettings({ ...sample, theme: undefined })).toBe(false)
     expect(isSettings(null)).toBe(false)
   })
 

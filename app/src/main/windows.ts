@@ -11,25 +11,35 @@ import {
   watchOverlayBounds,
   type OverlayBounds
 } from './overlay-bounds'
+import { load as loadSettings } from './settings-store'
 
 // Shared webPreferences: context isolation ON, node integration OFF, preload wired.
 // sandbox: false is kept from the electron-vite template (required for the
 // @electron-toolkit/preload bridge the template provides).
-const baseWebPreferences = {
-  preload: join(__dirname, '../preload/index.js'),
-  contextIsolation: true,
-  nodeIntegration: false,
-  sandbox: false
+function themeArgument(): string {
+  try {
+    const theme = loadSettings().theme
+    return `--veyra-theme=${theme === 'dark' ? 'dark' : 'light'}`
+  } catch {
+    return '--veyra-theme=light'
+  }
 }
 
-// The overlay window renders a DIFFERENT screen than the main window (both
-// load the same renderer bundle; plan step 18). The role is passed via
-// additionalArguments -- the documented Electron mechanism for per-window
-// preload-visible flags -- and resolved by the preload
-// (src/preload/transcript-api.ts: resolveWindowRole(process.argv)).
-const overlayWebPreferences = {
-  ...baseWebPreferences,
-  additionalArguments: ['--veyra-window=overlay']
+function baseWebPreferences(): Electron.WebPreferences {
+  return {
+    preload: join(__dirname, '../preload/index.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: false,
+    additionalArguments: [themeArgument()]
+  }
+}
+
+function overlayWebPreferences(): Electron.WebPreferences {
+  return {
+    ...baseWebPreferences(),
+    additionalArguments: [themeArgument(), '--veyra-window=overlay']
+  }
 }
 
 function loadRenderer(win: BrowserWindow): void {
@@ -50,7 +60,7 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: baseWebPreferences
+    webPreferences: baseWebPreferences()
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -116,7 +126,7 @@ export function createOverlayWindow(): BrowserWindow {
     skipTaskbar: true,
     resizable: true,
     show: false,
-    webPreferences: overlayWebPreferences
+    webPreferences: overlayWebPreferences()
   })
 
   // Persist moves/resizes across restarts (debounced; flushed on close).

@@ -27,7 +27,8 @@ export function isSettings(value: unknown): value is Settings {
   return (
     typeof v['apiKey'] === 'string' &&
     (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
-    (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null)
+    (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null) &&
+    (v['theme'] === 'light' || v['theme'] === 'dark')
   )
 }
 
@@ -54,16 +55,36 @@ export function load(): Settings {
   try {
     const raw = readFileSync(settingsPath(), 'utf8')
     const parsed: unknown = JSON.parse(raw)
-    if (!isSettings(parsed)) return { apiKey: '', sttModel: 'tiny', audioDeviceId: null }
+    if (!isSettings(parsed)) {
+      // Backward compat: files written before theme existed lack the field.
+      // If the old shape validates, migrate forward with the default theme.
+      if (typeof parsed === 'object' && parsed !== null) {
+        const v = parsed as Record<string, unknown>
+        const oldValid =
+          typeof v['apiKey'] === 'string' &&
+          (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
+          (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null)
+        if (oldValid) {
+          return {
+            apiKey: decryptApiKey(v['apiKey'] as string),
+            sttModel: v['sttModel'] as Settings['sttModel'],
+            audioDeviceId: v['audioDeviceId'] as string | null,
+            theme: 'light'
+          }
+        }
+      }
+      return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light' }
+    }
     return {
       apiKey: decryptApiKey(parsed.apiKey),
       sttModel: parsed.sttModel,
-      audioDeviceId: parsed.audioDeviceId
+      audioDeviceId: parsed.audioDeviceId,
+      theme: parsed.theme
     }
   } catch {
     // First run (no file), corrupt JSON, or a key that no longer decrypts
     // (tampered file / different Windows user): fall back to defaults, never crash.
-    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null }
+    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light' }
   }
 }
 
@@ -76,7 +97,8 @@ export function save(settings: Settings): Settings {
   const payload = {
     apiKey: encryptApiKey(settings.apiKey),
     sttModel: settings.sttModel,
-    audioDeviceId: settings.audioDeviceId
+    audioDeviceId: settings.audioDeviceId,
+    theme: settings.theme
   }
   const file = settingsPath()
   mkdirSync(dirname(file), { recursive: true })

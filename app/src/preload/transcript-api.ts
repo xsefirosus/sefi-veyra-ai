@@ -17,6 +17,18 @@ export function resolveWindowRole(argv: readonly string[]): WindowRole {
   return argv.includes(WINDOW_ROLE_ARG) ? 'overlay' : 'main'
 }
 
+export const THEME_ARG_PREFIX = '--veyra-theme='
+
+export type Theme = 'light' | 'dark'
+
+/** Resolve the persisted theme from additionalArguments; defaults to 'light'. */
+export function resolveInitialTheme(argv: readonly string[]): Theme {
+  const found = argv.find((a) => a.startsWith(THEME_ARG_PREFIX))
+  if (!found) return 'light'
+  const value = found.slice(THEME_ARG_PREFIX.length)
+  return value === 'dark' ? 'dark' : 'light'
+}
+
 /** Structural slice of ipcRenderer used here (testable without Electron). */
 export interface IpcSubscribe {
   on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown

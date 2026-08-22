@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  hydrate,
   initialSettings,
   settingsReducer,
   setApiKey,
   setAudioDevice,
-  setSttModel
+  setSttModel,
+  setTheme
 } from '../src/renderer/src/settings/settings-reducer'
 
 describe('settings-reducer', () => {
@@ -12,7 +14,8 @@ describe('settings-reducer', () => {
     expect(initialSettings).toEqual({
       apiKey: '',
       sttModel: 'tiny',
-      audioDeviceId: null
+      audioDeviceId: null,
+      theme: 'light'
     })
   })
 
@@ -41,6 +44,25 @@ describe('settings-reducer', () => {
     const withDevice = settingsReducer(initialSettings, setAudioDevice('dev-1'))
     const next = settingsReducer(withDevice, setAudioDevice(null))
     expect(next.audioDeviceId).toBeNull()
+  })
+
+  it('setTheme switches light ↔ dark', () => {
+    const toDark = settingsReducer(initialSettings, setTheme('dark'))
+    expect(toDark.theme).toBe('dark')
+    expect(toDark.apiKey).toBe('')
+    const toLight = settingsReducer(toDark, setTheme('light'))
+    expect(toLight.theme).toBe('light')
+  })
+
+  it('hydrate merges persisted settings including theme', () => {
+    const persisted = {
+      apiKey: 'k',
+      sttModel: 'base' as const,
+      audioDeviceId: 'dev-2',
+      theme: 'dark' as const
+    }
+    const next = settingsReducer(initialSettings, hydrate(persisted))
+    expect(next).toEqual(persisted)
   })
 
   it('unknown action returns the state unchanged (same reference)', () => {

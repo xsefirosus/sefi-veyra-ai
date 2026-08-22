@@ -144,7 +144,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   `data-theme="light"` and `data-theme="dark"` both render legibly with
  correct contrast. Commit.
 
-- [ ] 3. **Theme setting + toggle.** Extend `Settings` (needs: 2)
+- [x] 3. **Theme setting + toggle.** Extend `Settings` (needs: 2)
   (`settings-reducer.ts`) with `theme: 'light' | 'dark'`, default `'light'`.
   Extend `settings-store.ts`'s `isSettings` validator and `load()`/`save()`
   to carry it through (plaintext, no encryption — approach decision 3's

@@ -1,7 +1,7 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
 import type { TranscriptEvent } from '../shared/types'
-import type { WindowRole } from './transcript-api'
+import type { Theme, WindowRole } from './transcript-api'
 
 export interface Api {
   saveSettings: (settings: Settings) => Promise<Settings>
@@ -17,6 +17,8 @@ export interface Api {
   onTranscriptEvent: (cb: (event: TranscriptEvent) => void) => () => void
   /** Step 18: 'overlay' for the overlay window, 'main' otherwise. */
   windowRole: WindowRole
+  /** Phase 3 step 3: theme from additionalArguments, available synchronously before React mounts. */
+  initialTheme: Theme
   /** Step 3: CaptureSession lifecycle */
   startSession: (settings: Settings) => Promise<{ state: string; lastError: string | null }>
   stopSession: () => Promise<{ state: string; lastError: string | null }>

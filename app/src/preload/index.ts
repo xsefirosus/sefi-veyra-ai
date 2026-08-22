@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
 import type { TranscriptEvent } from '../shared/types'
-import { resolveWindowRole, subscribeTranscriptEvents } from './transcript-api'
+import { resolveInitialTheme, resolveWindowRole, subscribeTranscriptEvents } from './transcript-api'
 
 // Custom APIs for renderer
 const api = {
@@ -49,7 +49,11 @@ const api = {
     subscribeTranscriptEvents(ipcRenderer, cb),
   // Step 18: which window this renderer belongs to ('overlay' vs 'main'),
   // resolved from the window's additionalArguments (windows.ts).
-  windowRole: resolveWindowRole(process.argv)
+  windowRole: resolveWindowRole(process.argv),
+  // Phase 3 step 3: persisted theme read synchronously from additionalArguments
+  // (windows.ts: themeArgument) so the renderer can set data-theme BEFORE
+  // first paint, avoiding any flash of the wrong theme.
+  initialTheme: resolveInitialTheme(process.argv)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

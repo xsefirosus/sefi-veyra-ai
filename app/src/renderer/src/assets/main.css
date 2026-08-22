@@ -50,12 +50,91 @@ body {
   padding-top: 0.5rem;
 }
 
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 26rem;
+  margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+.settings-header .settings-title {
+  margin-bottom: 0;
+}
+
 .settings-title {
   font-size: 2.5rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   color: var(--ev-c-text-1);
   margin-bottom: 2rem;
+}
+
+/* Phase 3 step 3: pill-shaped light/dark switch (sun/moon) in the settings header */
+.theme-toggle {
+  position: relative;
+  width: 3.5rem;
+  height: 1.9rem;
+  border-radius: 9999px;
+  border: 1px solid var(--ev-c-gray-2);
+  background-color: var(--color-background-mute);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 200ms,
+    border-color 200ms;
+  padding: 0;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--ev-c-text-1);
+  outline-offset: 2px;
+}
+
+.theme-toggle-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.38rem;
+  pointer-events: none;
+}
+
+.theme-toggle-icon {
+  display: inline-flex;
+  color: var(--ev-c-text-3);
+  transition: color 200ms;
+}
+
+.theme-toggle-icon--sun {
+  color: var(--ev-c-text-2);
+}
+
+.theme-toggle--dark .theme-toggle-icon--sun {
+  color: var(--ev-c-text-3);
+}
+
+.theme-toggle--dark .theme-toggle-icon--moon {
+  color: var(--ev-c-text-1);
+}
+
+.theme-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 9999px;
+  background-color: var(--ev-c-text-1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 200ms ease;
+}
+
+.theme-toggle--dark .theme-toggle-knob {
+  transform: translateX(1.55rem);
 }
 
 .settings-form {
