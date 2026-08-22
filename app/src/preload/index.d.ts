@@ -20,6 +20,8 @@ export interface Api {
   windowRole: WindowRole
   /** Phase 3 step 3: theme from additionalArguments, available synchronously before React mounts. */
   initialTheme: Theme
+  /** Phase 3 step 13: stealthMode from additionalArguments, available synchronously before React mounts. */
+  initialStealthMode: boolean
   /** Step 3: CaptureSession lifecycle */
   startSession: (settings: Settings) => Promise<{ state: string; lastError: string | null }>
   stopSession: () => Promise<{ state: string; lastError: string | null }>
@@ -31,6 +33,8 @@ export interface Api {
   pickFile: () => Promise<{ fileName: string; text: string } | null>
   /** Phase 3 step 12: overlay opacity slider -> main BrowserWindow.setOpacity(value/100). */
   setOverlayOpacity: (value: number) => Promise<number>
+  /** Phase 3 step 13: subscribe to settings-changed broadcasts (both windows); returns unsubscribe. */
+  onSettingsChanged: (cb: (settings: Settings) => void) => () => void
 }
 
 declare global {

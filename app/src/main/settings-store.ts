@@ -1,4 +1,4 @@
-import { app, ipcMain, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
@@ -19,6 +19,16 @@ import type { Settings } from '../renderer/src/settings/settings-reducer'
 const SETTINGS_FILE = 'veyra-settings.json'
 const SAVE_CHANNEL = 'settings:save'
 const LOAD_CHANNEL = 'settings:load'
+/**
+ * Step 13: broadcast channel for settings changes to both windows.
+ * Choice: `settings-changed` via webContents.send, same mechanism as
+ * `session-state` (main/index.ts broadcastSessionState) and
+ * TRANSCRIPT_EVENT_CHANNEL. This reuses the existing broadcast pattern
+ * (main -> both renderers via webContents.send) rather than adding a new
+ * invoke/handle pair, and carries the full Settings object so any future
+ * field stays in sync without per-field channels.
+ */
+export const SETTINGS_CHANGED_CHANNEL = 'settings-changed'
 
 /** Trust-boundary shape check (moved here from step 7's inline handler). */
 export function isSettings(value: unknown): value is Settings {
@@ -33,7 +43,8 @@ export function isSettings(value: unknown): value is Settings {
     Number.isFinite(v['overlayOpacity']) &&
     Number.isInteger(v['overlayOpacity']) &&
     (v['overlayOpacity'] as number) >= 0 &&
-    (v['overlayOpacity'] as number) <= 100
+    (v['overlayOpacity'] as number) <= 100 &&
+    typeof v['stealthMode'] === 'boolean'
   )
 }
 
@@ -61,10 +72,10 @@ export function load(): Settings {
     const raw = readFileSync(settingsPath(), 'utf8')
     const parsed: unknown = JSON.parse(raw)
     if (!isSettings(parsed)) {
-      // Backward compat: files written before theme/overlayOpacity existed lack
+      // Backward compat: files written before theme/overlayOpacity/stealthMode existed lack
       // those fields. If the old shape validates, migrate forward with defaults.
       // overlayOpacity default 90 — sane window legibility, NOT the canvas's
-      // illustrative 65% copy which was a mockup placeholder.
+      // illustrative 65% copy which was a mockup placeholder. stealthMode default false.
       if (typeof parsed === 'object' && parsed !== null) {
         const v = parsed as Record<string, unknown>
         const baseValid =
@@ -80,35 +91,46 @@ export function load(): Settings {
             Number.isInteger(opacityRaw) &&
             opacityRaw >= 0 &&
             opacityRaw <= 100
+          const stealthValid = typeof v['stealthMode'] === 'boolean'
           // Any combination of missing/invalid new fields -> migrate with defaults
           // for those fields, but only if the base fields are intact.
           const theme = themeValid ? (v['theme'] as Settings['theme']) : 'light'
           const overlayOpacity = opacityValid ? (opacityRaw as number) : 90
-          // If either new field was missing/invalid, treat as migratable.
-          if (!themeValid || !opacityValid) {
+          const stealthMode = stealthValid ? (v['stealthMode'] as boolean) : false
+          // If any new field was missing/invalid, treat as migratable.
+          if (!themeValid || !opacityValid || !stealthValid) {
             return {
               apiKey: decryptApiKey(v['apiKey'] as string),
               sttModel: v['sttModel'] as Settings['sttModel'],
               audioDeviceId: v['audioDeviceId'] as string | null,
               theme,
-              overlayOpacity
+              overlayOpacity,
+              stealthMode
             }
           }
         }
       }
-      return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light', overlayOpacity: 90 }
+      return {
+        apiKey: '',
+        sttModel: 'tiny',
+        audioDeviceId: null,
+        theme: 'light',
+        overlayOpacity: 90,
+        stealthMode: false
+      }
     }
     return {
       apiKey: decryptApiKey(parsed.apiKey),
       sttModel: parsed.sttModel,
       audioDeviceId: parsed.audioDeviceId,
       theme: parsed.theme,
-      overlayOpacity: parsed.overlayOpacity
+      overlayOpacity: parsed.overlayOpacity,
+      stealthMode: parsed.stealthMode
     }
   } catch {
     // First run (no file), corrupt JSON, or a key that no longer decrypts
     // (tampered file / different Windows user): fall back to defaults, never crash.
-    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light', overlayOpacity: 90 }
+    return { apiKey: '', sttModel: 'tiny', audioDeviceId: null, theme: 'light', overlayOpacity: 90, stealthMode: false }
   }
 }
 
@@ -123,12 +145,29 @@ export function save(settings: Settings): Settings {
     sttModel: settings.sttModel,
     audioDeviceId: settings.audioDeviceId,
     theme: settings.theme,
-    overlayOpacity: settings.overlayOpacity
+    overlayOpacity: settings.overlayOpacity,
+    stealthMode: settings.stealthMode
   }
   const file = settingsPath()
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(payload, null, 2), 'utf8')
+  broadcastSettings(settings)
   return settings
+}
+
+function broadcastSettings(settings: Settings): void {
+  // Step 13: fan out the fresh settings to both windows (main + overlay) via
+  // webContents.send, same pattern as session-state and transcript broadcasts.
+  // Best-effort: a window may be closing; isDestroyed() guards the send.
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send(SETTINGS_CHANGED_CHANNEL, settings)
+      } catch {
+        // Broadcast is best-effort; a transient send failure must not throw.
+      }
+    }
+  }
 }
 
 /** Register the settings:save / settings:load IPC handlers. Call once from main index. */

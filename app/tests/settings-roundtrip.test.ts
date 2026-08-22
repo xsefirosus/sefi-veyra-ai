@@ -28,7 +28,8 @@ const savedOnDisk: Settings = {
   sttModel: 'base',
   audioDeviceId: 'dev-9',
   theme: 'light',
-  overlayOpacity: 90
+  overlayOpacity: 90,
+  stealthMode: false
 }
 
 describe('step 11: hydration on mount', () => {

@@ -8,6 +8,7 @@ export interface Settings {
   audioDeviceId: string | null
   theme: Theme
   overlayOpacity: number
+  stealthMode: boolean
 }
 
 export const initialSettings: Settings = {
@@ -15,7 +16,8 @@ export const initialSettings: Settings = {
   sttModel: 'tiny',
   audioDeviceId: null,
   theme: 'light',
-  overlayOpacity: 90
+  overlayOpacity: 90,
+  stealthMode: false
 }
 
 export type SettingsAction =
@@ -24,6 +26,7 @@ export type SettingsAction =
   | { type: 'setAudioDevice'; audioDeviceId: string | null }
   | { type: 'setTheme'; theme: Theme }
   | { type: 'setOverlayOpacity'; overlayOpacity: number }
+  | { type: 'setStealthMode'; stealthMode: boolean }
   /** Step 11: replace defaults with the persisted settings loaded on mount. */
   | { type: 'hydrate'; settings: Settings }
 
@@ -45,6 +48,10 @@ export function setTheme(theme: Theme): SettingsAction {
 
 export function setOverlayOpacity(overlayOpacity: number): SettingsAction {
   return { type: 'setOverlayOpacity', overlayOpacity }
+}
+
+export function setStealthMode(stealthMode: boolean): SettingsAction {
+  return { type: 'setStealthMode', stealthMode }
 }
 
 /** Step 11: action creator for the mount-time hydration from settings:load. */
@@ -69,6 +76,8 @@ export function settingsReducer(state: Settings, action: SettingsAction): Settin
       const clamped = Math.round(Math.min(100, Math.max(0, Number.isFinite(v) ? v : 90)))
       return { ...state, overlayOpacity: clamped }
     }
+    case 'setStealthMode':
+      return { ...state, stealthMode: action.stealthMode }
     case 'hydrate':
       // Merge over the current state so a partial payload can never blank a field.
       return { ...state, ...action.settings }

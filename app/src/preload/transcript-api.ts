@@ -29,6 +29,15 @@ export function resolveInitialTheme(argv: readonly string[]): Theme {
   return value === 'dark' ? 'dark' : 'light'
 }
 
+export const STEALTH_ARG_PREFIX = '--veyra-stealth='
+
+/** Resolve the persisted stealthMode from additionalArguments; defaults to false. */
+export function resolveInitialStealthMode(argv: readonly string[]): boolean {
+  const found = argv.find((a) => a.startsWith(STEALTH_ARG_PREFIX))
+  if (!found) return false
+  return found.slice(STEALTH_ARG_PREFIX.length) === '1'
+}
+
 /** Structural slice of ipcRenderer used here (testable without Electron). */
 export interface IpcSubscribe {
   on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown

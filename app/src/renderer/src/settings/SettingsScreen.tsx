@@ -5,6 +5,7 @@ import {
   setApiKey,
   setAudioDevice,
   setOverlayOpacity,
+  setStealthMode,
   setSttModel,
   setTheme,
   settingsReducer,
@@ -219,6 +220,22 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
     document.documentElement.dataset.theme = settings.theme
   }, [settings.theme])
 
+  // Phase 3 step 13: live sync of settings (stealthMode/theme/opacity) from
+  // main's `settings-changed` broadcast (same mechanism as `session-state`).
+  // Choice documented in src/main/settings-store.ts: `settings-changed` via
+  // webContents.send to both windows. Hydrate keeps this window's reducer in
+  // sync when the other window persists a change.
+  useEffect(() => {
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    if (!maybeApi?.onSettingsChanged) return
+    const unsubscribe = maybeApi.onSettingsChanged((latest) => {
+      dispatch(hydrate(latest))
+      // Keep the theme attribute in sync when the change came from the other window.
+      if (latest.theme) document.documentElement.dataset.theme = latest.theme
+    })
+    return unsubscribe
+  }, [dispatch])
+
   const toggleTheme = (): void => {
     const next: Theme = settings.theme === 'dark' ? 'light' : 'dark'
     edit(setTheme(next))
@@ -320,6 +337,22 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
     }
     if (maybeApi?.saveSettings) {
       const nextSettings: Settings = { ...settings, overlayOpacity: clamped }
+      void persistSettings(maybeApi.saveSettings, nextSettings).then((outcome) => {
+        if (outcome.ok) dispatchUi({ type: 'saveOk' })
+        else dispatchUi({ type: 'saveFailed', message: outcome.message })
+      })
+    }
+  }
+
+  const onStealthToggle = (): void => {
+    const next = !settings.stealthMode
+    edit(setStealthMode(next))
+    const maybeApi = (window as unknown as { api?: Window['api'] }).api
+    if (maybeApi?.saveSettings) {
+      const nextSettings: Settings = { ...settings, stealthMode: next }
+      // Persist + broadcast via settings-store's settings-changed (step 13).
+      // Broadcast choice: `settings-changed` via webContents.send to both
+      // windows, same mechanism as `session-state` (see settings-store.ts).
       void persistSettings(maybeApi.saveSettings, nextSettings).then((outcome) => {
         if (outcome.ok) dispatchUi({ type: 'saveOk' })
         else dispatchUi({ type: 'saveFailed', message: outcome.message })
@@ -487,6 +520,24 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
           <span className="visibility-extreme" aria-hidden="true">
             Full
           </span>
+        </div>
+        <div className="visibility-stealth-row">
+          <div className="visibility-stealth-copy">
+            <span className="visibility-stealth-label">Stealth mode</span>
+            <span className="visibility-stealth-desc">
+              Minimal overlay — just the answer text, no card or buttons. Ideal for screen-sharing.
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.stealthMode}
+            aria-label="Toggle stealth mode"
+            className={`stealth-toggle${settings.stealthMode ? ' stealth-toggle--on' : ''}`}
+            onClick={onStealthToggle}
+          >
+            <span className="stealth-toggle-knob" aria-hidden="true" />
+          </button>
         </div>
       </div>
       <PersonaPanel />

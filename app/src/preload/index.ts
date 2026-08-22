@@ -3,7 +3,12 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { Settings } from '../renderer/src/settings/settings-reducer'
 import type { PersonaData } from '../renderer/src/persona/persona-reducer'
 import type { TranscriptEvent } from '../shared/types'
-import { resolveInitialTheme, resolveWindowRole, subscribeTranscriptEvents } from './transcript-api'
+import {
+  resolveInitialStealthMode,
+  resolveInitialTheme,
+  resolveWindowRole,
+  subscribeTranscriptEvents
+} from './transcript-api'
 
 // Custom APIs for renderer
 const api = {
@@ -55,6 +60,8 @@ const api = {
   // (windows.ts: themeArgument) so the renderer can set data-theme BEFORE
   // first paint, avoiding any flash of the wrong theme.
   initialTheme: resolveInitialTheme(process.argv),
+  // Phase 3 step 13: persisted stealthMode synchronously for overlay initial state.
+  initialStealthMode: resolveInitialStealthMode(process.argv),
   // Phase 3 step 9: persona persistence + resume file picker (main reads + parses via parse-document)
   loadPersona: (): Promise<PersonaData> => ipcRenderer.invoke('persona:load'),
   savePersona: (data: PersonaData): Promise<PersonaData> =>
@@ -63,7 +70,21 @@ const api = {
     ipcRenderer.invoke('dialog:pickFile'),
   // Phase 3 step 12: overlay opacity — slider value 0-100 -> main overlayWindow.setOpacity(value/100)
   setOverlayOpacity: (value: number): Promise<number> =>
-    ipcRenderer.invoke('overlay:set-opacity', value)
+    ipcRenderer.invoke('overlay:set-opacity', value),
+  // Phase 3 step 13: stealthMode + general settings sync — main broadcasts
+  // `settings-changed` (full Settings) to both windows via webContents.send;
+  // same mechanism as `session-state` and transcript broadcasts.
+  // Choice documented in src/main/settings-store.ts: reuse the broadcast
+  // pattern rather than adding per-field channels.
+  onSettingsChanged: (cb: (settings: Settings) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown): void => {
+      cb(payload as Settings)
+    }
+    ipcRenderer.on('settings-changed', listener)
+    return () => {
+      ipcRenderer.removeListener('settings-changed', listener)
+    }
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

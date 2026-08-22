@@ -25,20 +25,30 @@ function themeArgument(): string {
   }
 }
 
+function stealthArgument(): string {
+  try {
+    const stealth = loadSettings().stealthMode
+    return `--veyra-stealth=${stealth ? '1' : '0'}`
+  } catch {
+    return '--veyra-stealth=0'
+  }
+}
+
 function baseWebPreferences(): Electron.WebPreferences {
   return {
     preload: join(__dirname, '../preload/index.js'),
     contextIsolation: true,
     nodeIntegration: false,
     sandbox: false,
-    additionalArguments: [themeArgument()]
+    additionalArguments: [themeArgument(), stealthArgument()]
   }
 }
 
 function overlayWebPreferences(): Electron.WebPreferences {
+  const base = baseWebPreferences()
   return {
-    ...baseWebPreferences(),
-    additionalArguments: [themeArgument(), '--veyra-window=overlay']
+    ...base,
+    additionalArguments: [...(base.additionalArguments ?? []), '--veyra-window=overlay']
   }
 }
 

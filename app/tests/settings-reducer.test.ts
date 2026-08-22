@@ -6,6 +6,7 @@ import {
   setApiKey,
   setAudioDevice,
   setOverlayOpacity,
+  setStealthMode,
   setSttModel,
   setTheme
 } from '../src/renderer/src/settings/settings-reducer'
@@ -17,7 +18,8 @@ describe('settings-reducer', () => {
       sttModel: 'tiny',
       audioDeviceId: null,
       theme: 'light',
-      overlayOpacity: 90
+      overlayOpacity: 90,
+      stealthMode: false
     })
   })
 
@@ -62,7 +64,8 @@ describe('settings-reducer', () => {
       sttModel: 'base' as const,
       audioDeviceId: 'dev-2',
       theme: 'dark' as const,
-      overlayOpacity: 75 as const
+      overlayOpacity: 75 as const,
+      stealthMode: true as const
     }
     const next = settingsReducer(initialSettings, hydrate(persisted))
     expect(next).toEqual(persisted)
@@ -82,6 +85,14 @@ describe('settings-reducer', () => {
   it('setOverlayOpacity handles non-finite input as default 90', () => {
     const next = settingsReducer(initialSettings, setOverlayOpacity(NaN))
     expect(next.overlayOpacity).toBe(90)
+  })
+
+  it('setStealthMode toggles stealth mode', () => {
+    const toTrue = settingsReducer(initialSettings, setStealthMode(true))
+    expect(toTrue.stealthMode).toBe(true)
+    expect(toTrue.apiKey).toBe('')
+    const toFalse = settingsReducer(toTrue, setStealthMode(false))
+    expect(toFalse.stealthMode).toBe(false)
   })
 
   it('unknown action returns the state unchanged (same reference)', () => {

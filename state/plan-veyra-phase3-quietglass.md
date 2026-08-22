@@ -264,7 +264,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   step 18 that dragging the slider actually dims the real overlay window.
  Commit.
 
-- [ ] 13. **Stealth mode setting.** Extend `Settings` + (needs: 5)
+- [x] 13. **Stealth mode setting.** Extend `Settings` + (needs: 5)
   `settings-store.ts` with `stealthMode: boolean`, default `false`. Add the
   toggle to the Visibility card per the canvas (with its explanatory copy).
   Broadcast the setting to both windows the same way theme/session-state

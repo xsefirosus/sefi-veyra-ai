@@ -24,6 +24,9 @@ vi.mock('electron', () => ({
   },
   ipcMain: {
     handle: vi.fn()
+  },
+  BrowserWindow: {
+    getAllWindows: (): unknown[] => []
   }
 }))
 
@@ -37,7 +40,8 @@ const sample: Settings = {
   sttModel: 'base',
   audioDeviceId: 'dev-1',
   theme: 'dark',
-  overlayOpacity: 90
+  overlayOpacity: 90,
+  stealthMode: false
 }
 
 function fileContent(): string {
@@ -59,7 +63,8 @@ describe('settings-store', () => {
       sttModel: 'tiny',
       audioDeviceId: null,
       theme: 'light',
-      overlayOpacity: 90
+      overlayOpacity: 90,
+      stealthMode: false
     })
   })
 
@@ -88,6 +93,7 @@ describe('settings-store', () => {
     expect(content).toContain('"audioDeviceId": "dev-1"')
     expect(content).toContain('"theme": "dark"')
     expect(content).toContain('"overlayOpacity": 90')
+    expect(content).toContain('"stealthMode": false')
   })
 
   it('theme round-trips and is plaintext', () => {
@@ -113,6 +119,7 @@ describe('settings-store', () => {
     writeFileSync(file, JSON.stringify(oldPayload), 'utf8')
     expect(load().theme).toBe('light')
     expect(load().overlayOpacity).toBe(90)
+    expect(load().stealthMode).toBe(false)
     expect(load().apiKey).toBe(sample.apiKey)
   })
 
@@ -128,6 +135,24 @@ describe('settings-store', () => {
     }
     writeFileSync(file, JSON.stringify(oldPayload), 'utf8')
     expect(load().overlayOpacity).toBe(90)
+    expect(load().theme).toBe('dark')
+    expect(load().stealthMode).toBe(false)
+  })
+
+  it('migrates files written before stealthMode existed (defaults to false)', () => {
+    const file = join(mockUserDataDir, SETTINGS_FILE)
+    mkdirSync(dirname(file), { recursive: true })
+    const encrypted = Buffer.from(sample.apiKey, 'utf8').toString('base64')
+    const oldPayload = {
+      apiKey: encrypted,
+      sttModel: sample.sttModel,
+      audioDeviceId: sample.audioDeviceId,
+      theme: 'dark',
+      overlayOpacity: 80
+    }
+    writeFileSync(file, JSON.stringify(oldPayload), 'utf8')
+    expect(load().stealthMode).toBe(false)
+    expect(load().overlayOpacity).toBe(80)
     expect(load().theme).toBe('dark')
   })
 
@@ -158,7 +183,18 @@ describe('settings-store', () => {
     expect(isSettings({ ...sample, overlayOpacity: 45.5 })).toBe(false)
     expect(isSettings({ ...sample, overlayOpacity: '90' as unknown as number })).toBe(false)
     expect(isSettings({ ...sample, overlayOpacity: undefined as unknown as number })).toBe(false)
+    expect(isSettings({ ...sample, stealthMode: 'false' as unknown as boolean })).toBe(false)
+    expect(isSettings({ ...sample, stealthMode: undefined as unknown as boolean })).toBe(false)
     expect(isSettings(null)).toBe(false)
+  })
+
+  it('stealthMode round-trips and is plaintext', () => {
+    save({ ...sample, stealthMode: true })
+    expect(load().stealthMode).toBe(true)
+    expect(fileContent()).toContain('"stealthMode": true')
+    save({ ...sample, stealthMode: false })
+    expect(load().stealthMode).toBe(false)
+    expect(fileContent()).toContain('"stealthMode": false')
   })
 
   it('registerIpcHandlers registers settings:save and settings:load on ipcMain', () => {
