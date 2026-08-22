@@ -116,7 +116,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
 
 ## Steps
 
-- [ ] 1. **Confirm real PDF/DOCX text-extraction libraries.** Research (needs: -)
+- [x] 1. **Confirm real PDF/DOCX text-extraction libraries.** Research (needs: -)
   current (2026), actively-maintained, pure-JS (no native compile step) npm
   packages for extracting plain text from `.pdf` and `.docx` files,
   installable into `app/` without a native rebuild (same bar
