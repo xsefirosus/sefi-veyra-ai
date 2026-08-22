@@ -116,7 +116,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
 
 ## Steps
 
-- [ ] 1. **Confirm real PDF/DOCX text-extraction libraries.** Research
+- [ ] 1. **Confirm real PDF/DOCX text-extraction libraries.** Research (needs: -)
   current (2026), actively-maintained, pure-JS (no native compile step) npm
   packages for extracting plain text from `.pdf` and `.docx` files,
   installable into `app/` without a native rebuild (same bar
@@ -127,9 +127,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   dependency). If no clean pure-JS option exists for one format, record that
   and pick the least-risk alternative (e.g., a WASM-based parser is
   acceptable if it needs no native rebuild; document the tradeoff). `.txt`
-  and `.md` need no library — read directly. Commit. (needs: -)
+ and `.md` need no library — read directly. Commit.
 
-- [ ] 2. **Theme tokens: light (new) + dark (existing, re-scoped).** In
+- [ ] 2. **Theme tokens: light (new) + dark (existing, re-scoped).** In (needs: -)
   `app/src/renderer/src/assets/base.css`, split the current `:root` color
   block into `:root[data-theme="light"]` (the new palette — see "Design
   source of truth") and `:root[data-theme="dark"]` (the EXISTING `--ev-c-*`
@@ -142,9 +142,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   build` passes; visually inspect (via the `run` skill or a build+CDP
   screenshot, matching the method used in the audit-02 live-fire test) that
   `data-theme="light"` and `data-theme="dark"` both render legibly with
-  correct contrast. Commit. (needs: -)
+ correct contrast. Commit.
 
-- [ ] 3. **Theme setting + toggle.** Extend `Settings`
+- [ ] 3. **Theme setting + toggle.** Extend `Settings` (needs: 2)
   (`settings-reducer.ts`) with `theme: 'light' | 'dark'`, default `'light'`.
   Extend `settings-store.ts`'s `isSettings` validator and `load()`/`save()`
   to carry it through (plaintext, no encryption — approach decision 3's
@@ -157,9 +157,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   updates the attribute live and persists via `saveSettings`. Tests:
   `settings-reducer.test.ts` gains the new action; `settings-store.test.ts`
   gains round-trip coverage for `theme`. Verify: `npm test`. Commit.
-  (needs: 2)
 
-- [ ] 4. **Red accent tokens + primary button restyle.** Add `--accent`,
+
+- [ ] 4. **Red accent tokens + primary button restyle.** Add `--accent`, (needs: 2)
   `--accent-soft`, `--accent-ink` to both theme scopes in `base.css` (light:
   the exact oklch triple from "Design source of truth"; dark: derive a
   dark-appropriate red at the same hue, e.g. adjust lightness for the dark
@@ -171,9 +171,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   `--accent`-colored border + `--accent-ink` text on transparent, per how
   the canvas differentiates primary vs. secondary — see the published
   artifact for the exact treatment). Verify: build + visual check. Commit.
-  (needs: 2)
 
-- [ ] 5. **Restyle Settings screen to Quiet Glass.** Update
+
+- [ ] 5. **Restyle Settings screen to Quiet Glass.** Update (needs: 3, 4)
   `SettingsScreen.tsx` + `main.css`: rounded-16px cards (`border-radius`),
   the pill-shaped `session-chip`, and the persona-card visual treatment
   (border, padding, spacing) to match the canvas. Add the inline SVG icon
@@ -181,9 +181,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   small local React components or inline SVG constants — no icon font, no
   emoji, stroke-based per the design (already established in the canvas
   markup — copy the exact `<path>` data rather than redrawing). Verify:
-  build + visual check against the canvas side by side. Commit. (needs: 3, 4)
+ build + visual check against the canvas side by side. Commit.
 
-- [ ] 6. **Restyle the overlay to the glass treatment.** Update
+- [ ] 6. **Restyle the overlay to the glass treatment.** Update (needs: 5)
   `OverlayScreen.tsx`/`TranscriptPanel.tsx`'s overlay variant + `main.css`:
   translucent card (`background: oklch(100% 0 0 / 0.7)`,
   `backdrop-filter: blur(6px)`, rounded corners, soft shadow) replacing the
@@ -192,9 +192,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   built in step 16 once the answer pipeline exists; this step only carries
   the transcript-tail rendering into the new visual language so the overlay
   isn't visually inconsistent while steps 7-15 are in progress. Verify:
-  build + visual check. Commit. (needs: 5)
+ build + visual check. Commit.
 
-- [ ] 7. **Persona storage.** New `src/main/persona/persona-store.ts`
+- [ ] 7. **Persona storage.** New `src/main/persona/persona-store.ts` (needs: 1)
   mirroring `settings-store.ts`'s shape: `PersonaData {resumeText: string,
   resumeFileName: string | null, jobDescription: string, notes: string,
   additionalDocs: Array<{fileName: string, text: string}>}`, JSON under
@@ -203,9 +203,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   registered alongside the existing settings IPC registration. Tests
   `tests/persona-store.test.ts` mirroring `settings-store.test.ts`'s
   round-trip/corrupt-file/validation coverage. Verify: `npm test`. Commit.
-  (needs: 1)
 
-- [ ] 8. **File parsing pipeline.** `src/main/persona/parse-document.ts`:
+
+- [ ] 8. **File parsing pipeline.** `src/main/persona/parse-document.ts`: (needs: 1)
   given an absolute file path, detect type by extension, extract plain text
   using step 1's confirmed libraries for `.pdf`/`.docx`, direct read for
   `.txt`/`.md`, and throw a clear "unsupported file type" error otherwise
@@ -213,9 +213,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   the user, not a blank persona field). Tests with real small fixture files
   (a minimal `.pdf`, `.docx`, `.txt` committed under
   `app/tests/fixtures/persona/`) proving real extraction, not mocked
-  library calls. Verify: `npm test`. Commit. (needs: 1)
+ library calls. Verify: `npm test`. Commit.
 
-- [ ] 9. **Resume + job description + notes UI.** New
+- [ ] 9. **Resume + job description + notes UI.** New (needs: 5, 7, 8)
   `src/renderer/src/persona/PersonaPanel.tsx` in the settings screen,
   styled per the canvas's "Your background" card: resume upload (Electron
   `dialog.showOpenDialog` via a new `window.api.pickFile()` bridge → main
@@ -227,18 +227,18 @@ spec. Copy its exact values, never re-derive from memory or round them:
   component-logic tests for hydration or save-error surfacing, matching the
   settings screen's test shape. Verify: `npm test`; manual round-trip
   (upload a real resume, restart, confirm it reloads) at step 18. Commit.
-  (needs: 5, 7, 8)
 
-- [ ] 10. **Additional-context files UI.** Extend `PersonaPanel.tsx` with
+
+- [ ] 10. **Additional-context files UI.** Extend `PersonaPanel.tsx` with (needs: 9)
   the multi-file "Additional context (optional)" section per the canvas:
   a list of attached files (each removable) + an "Add a file" control
   (accent-outlined dashed button, matching the canvas exactly), each file
   going through step 8's parser and appended to `additionalDocs[]`. Tests:
   add/remove file updates persisted state correctly; a corrupt/unsupported
   file surfaces an error instead of silently dropping. Verify: `npm test`.
-  Commit. (needs: 9)
+ Commit.
 
-- [ ] 11. **Assemble `PersonaContext` for future Phase-4 consumption.** A
+- [ ] 11. **Assemble `PersonaContext` for future Phase-4 consumption.** A (needs: 7)
   small pure function (`src/shared/stt/... ` or a new
   `src/shared/llm/persona-context.ts`) that maps `PersonaData` (step 7) to
   the existing `PersonaContext` type (`src/shared/types.ts`, declared in
@@ -247,9 +247,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   additional files' text). NOT wired to any LLM call — this only proves the
   real persona data can be shaped into the real interface Phase 4 will
   consume. Test: given fixture `PersonaData`, assert the mapped
-  `PersonaContext` shape. Verify: `npm test`. Commit. (needs: 7)
+ `PersonaContext` shape. Verify: `npm test`. Commit.
 
-- [ ] 12. **Overlay opacity setting.** Extend `Settings` +
+- [ ] 12. **Overlay opacity setting.** Extend `Settings` + (needs: 5)
   `settings-store.ts` with `overlayOpacity: number` (0-100, default e.g. 90 —
   NOT 65; the canvas's "65%" was illustrative copy for the mockup, pick a
   sane real default and document why). Add the opacity slider to a new
@@ -262,18 +262,18 @@ spec. Copy its exact values, never re-derive from memory or round them:
   verification note, per the anti-hallucination registry. Tests: reducer/
   store coverage for the new field. Verify: `npm test`; visual check at
   step 18 that dragging the slider actually dims the real overlay window.
-  Commit. (needs: 5)
+ Commit.
 
-- [ ] 13. **Stealth mode setting.** Extend `Settings` +
+- [ ] 13. **Stealth mode setting.** Extend `Settings` + (needs: 5)
   `settings-store.ts` with `stealthMode: boolean`, default `false`. Add the
   toggle to the Visibility card per the canvas (with its explanatory copy).
   Broadcast the setting to both windows the same way theme/session-state
   already broadcast (a `settings-changed` or reuse of an existing channel —
   pick whichever is more consistent with the existing IPC surface and
   document the choice). Tests: reducer/store coverage. Verify: `npm test`.
-  Commit. (needs: 5)
+ Commit.
 
-- [ ] 14. **Stealth rendering.** `TranscriptPanel.tsx`'s overlay variant (and
+- [ ] 14. **Stealth rendering.** `TranscriptPanel.tsx`'s overlay variant (and (needs: 6, 13)
   the future `AnswerPanel` from step 16) conditionally render the minimal
   "state 4" treatment from the canvas when `stealthMode` is true: no card
   background/border/shadow beyond the faint `oklch(100% 0 0 / 0.22)` wash,
@@ -284,9 +284,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   `{stealthMode, theme, content}` → the class/style variant) rather than a
   snapshot test, matching this codebase's existing preference for testing
   logic over markup. Verify: `npm test`; visual check both modes at step 18.
-  Commit. (needs: 6, 13)
+ Commit.
 
-- [ ] 15. **Answer-suggestion IPC + reducer.** New `SUGGESTION_EVENT_CHANNEL`
+- [ ] 15. **Answer-suggestion IPC + reducer.** New `SUGGESTION_EVENT_CHANNEL` (needs: 1)
   broadcast (mirroring `TRANSCRIPT_EVENT_CHANNEL`'s exact pattern in
   `src/shared/types.ts` and `transcript-broadcast.ts`) carrying
   `SuggestionDelta` events (the real type from audit-01 step 17's
@@ -298,11 +298,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   starting. Tests: interleaved delta→delta→complete sequences produce the
   right accumulated text and terminal state; an abort mid-stream (no
   `complete` ever arrives) leaves the partial text visible rather than
-  hanging or erroring. Verify: `npm test`. Commit. (needs: 1, per the LLM
-  seam being audit-01 step 17's existing work — no new "needs" on this
-  plan's own steps)
+  hanging or erroring. Verify: `npm test`. Commit. 
 
-- [ ] 16. **Growing overlay UI.** New `AnswerPanel.tsx` (or extend
+- [ ] 16. **Growing overlay UI.** New `AnswerPanel.tsx` (or extend (needs: 6, 14, 15)
   `TranscriptPanel.tsx`'s overlay variant) rendering the answer-reducer's
   state through the THREE visible states from the canvas — Listening (no
   active suggestion: existing transcript tail from step 6), Generating
@@ -314,9 +312,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   length, not a hardcoded per-state jump, so it reads as continuous growth
   matching "windows progresses bigger as the answers are being generated."
   Verify: build + visual check with the step-17 mock seam feeding realistic
-  delta pacing. Commit. (needs: 6, 14, 15)
+ delta pacing. Commit.
 
-- [ ] 17. **`VEYRA_TEST_SUGGESTIONS` verification seam.** Mirroring
+- [ ] 17. **`VEYRA_TEST_SUGGESTIONS` verification seam.** Mirroring (needs: 16)
   `VEYRA_TEST_AUDIO` exactly: when the env var is set (to a path naming a
   JSON fixture of canned `SuggestionDelta` events with per-event delay
   hints, or a simple built-in canned sequence if a fixture file is
@@ -329,9 +327,9 @@ spec. Copy its exact values, never re-derive from memory or round them:
   as the audio seam). Verify: run with the env var set, confirm via a
   build+CDP screenshot sequence (the same method used in the audit-02
   live-fire test) that the overlay visibly grows through
-  Listening→Generating→Ready. Commit. (needs: 16)
+ Listening→Generating→Ready. Commit.
 
-- [ ] 18. **VERIFICATION GATE (human checkpoint).** Agent half: `npm test`,
+- [ ] 18. **VERIFICATION GATE (human checkpoint).** Agent half: `npm test`, (needs: 9, 10, 12, 14, 17)
   `npm run typecheck`, `npm run lint`, `npm run build` all clean; re-run the
   live-fire CDP-driven check from audit-02 (real app under Xvfb, fake mic
   audio) PLUS: toggle theme and screenshot both, upload a real fixture
@@ -348,7 +346,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   new visual language doesn't get in the way of a live transcript"), confirm
   opacity and stealth mode both feel usable during an actual video call
   window layout, not just in isolation. Nothing here is claimed complete
-  without that human record in `inbox/`. Commit. (needs: 9, 10, 12, 14, 17)
+ without that human record in `inbox/`. Commit.
 
 ## Files Touched
 - New (main): `src/main/persona/persona-store.ts`,
