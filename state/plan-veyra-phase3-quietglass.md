@@ -205,7 +205,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   round-trip/corrupt-file/validation coverage. Verify: `npm test`. Commit.
 
 
-- [ ] 8. **File parsing pipeline.** `src/main/persona/parse-document.ts`: (needs: 1)
+- [x] 8. **File parsing pipeline.** `src/main/persona/parse-document.ts`: (needs: 1)
   given an absolute file path, detect type by extension, extract plain text
   using step 1's confirmed libraries for `.pdf`/`.docx`, direct read for
   `.txt`/`.md`, and throw a clear "unsupported file type" error otherwise
