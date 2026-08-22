@@ -129,7 +129,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   acceptable if it needs no native rebuild; document the tradeoff). `.txt`
  and `.md` need no library — read directly. Commit.
 
-- [ ] 2. **Theme tokens: light (new) + dark (existing, re-scoped).** In (needs: -)
+- [x] 2. **Theme tokens: light (new) + dark (existing, re-scoped).** In (needs: -)
   `app/src/renderer/src/assets/base.css`, split the current `:root` color
   block into `:root[data-theme="light"]` (the new palette — see "Design
   source of truth") and `:root[data-theme="dark"]` (the EXISTING `--ev-c-*`
