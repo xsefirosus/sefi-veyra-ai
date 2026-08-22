@@ -300,7 +300,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   `complete` ever arrives) leaves the partial text visible rather than
   hanging or erroring. Verify: `npm test`. Commit. 
 
-- [ ] 16. **Growing overlay UI.** New `AnswerPanel.tsx` (or extend (needs: 6, 14, 15)
+- [x] 16. **Growing overlay UI.** New `AnswerPanel.tsx` (or extend (needs: 6, 14, 15)
   `TranscriptPanel.tsx`'s overlay variant) rendering the answer-reducer's
   state through the THREE visible states from the canvas — Listening (no
   active suggestion: existing transcript tail from step 6), Generating
