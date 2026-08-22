@@ -314,7 +314,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   Verify: build + visual check with the step-17 mock seam feeding realistic
  delta pacing. Commit.
 
-- [ ] 17. **`VEYRA_TEST_SUGGESTIONS` verification seam.** Mirroring (needs: 16)
+- [x] 17. **`VEYRA_TEST_SUGGESTIONS` verification seam.** Mirroring (needs: 16)
   `VEYRA_TEST_AUDIO` exactly: when the env var is set (to a path naming a
   JSON fixture of canned `SuggestionDelta` events with per-event delay
   hints, or a simple built-in canned sequence if a fixture file is

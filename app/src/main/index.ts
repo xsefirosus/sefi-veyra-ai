@@ -16,6 +16,7 @@ import {
   adapterEventToTranscriptEvent,
   broadcastTranscriptEvent
 } from './transcript/transcript-broadcast'
+import { handleTestSuggestions } from './llm/mock-suggestions'
 import { float32ToInt16 } from '../shared/audio/format'
 
 // Step 18: the two windows, held at module scope so the capture bridge can
@@ -328,6 +329,19 @@ app.whenReady().then(() => {
   })
 
   launchWindows()
+
+  // Phase 3 step 17: VEYRA_TEST_SUGGESTIONS verification seam — mirrors
+  // VEYRA_TEST_AUDIO exactly. When env var set (any truthy value -> built-in
+  // canned sequence; or a JSON fixture path -> those deltas), main constructs
+  // a MockSuggestionAdapter that emits SuggestionDelta events through the REAL
+  // SUGGESTION_EVENT_CHANNEL broadcast on timer, exercising the real reducer
+  // and AnswerPanel end to end. Env-gated, unreachable in normal runs.
+  // Note: win32 has no Xvfb for CDP screenshot automation; verify manually
+  // or note the platform caveat at the final gate (same class as Linux
+  // setOpacity caveat) — do not claim Xvfb screenshots on win32.
+  if (process.env['VEYRA_TEST_SUGGESTIONS']) {
+    handleTestSuggestions(() => [mainWindow, overlayWindow])
+  }
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
