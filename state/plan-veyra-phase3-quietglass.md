@@ -194,7 +194,7 @@ spec. Copy its exact values, never re-derive from memory or round them:
   isn't visually inconsistent while steps 7-15 are in progress. Verify:
  build + visual check. Commit.
 
-- [ ] 7. **Persona storage.** New `src/main/persona/persona-store.ts` (needs: 1)
+- [x] 7. **Persona storage.** New `src/main/persona/persona-store.ts` (needs: 1)
   mirroring `settings-store.ts`'s shape: `PersonaData {resumeText: string,
   resumeFileName: string | null, jobDescription: string, notes: string,
   additionalDocs: Array<{fileName: string, text: string}>}`, JSON under
