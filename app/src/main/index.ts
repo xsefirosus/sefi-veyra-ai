@@ -141,7 +141,7 @@ function setupPcmHandlers(): void {
 
 function setupSessionIpc(): void {
   const session = ensureCaptureSession()
-  // Defensive handler timeout: WLK_START_TIMEOUT_MS (60s) is the server's own
+  // Defensive handler timeout: WLK_START_TIMEOUT_MS (180s) is the server's own
   // deadline, but the handler must ALWAYS settle even if a lower layer hangs
   // (stuck WebSocket, stuck adapter.connect). Add a buffer so the server's
   // own rejection wins when it fires, but a stuck promise cannot produce

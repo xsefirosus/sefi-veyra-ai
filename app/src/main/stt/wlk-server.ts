@@ -67,7 +67,7 @@ export const WLK_DEFAULT_HOST = '127.0.0.1'
 // config.py:28). See the header comment for why this is 8000, not 9090.
 export const WLK_DEFAULT_PORT = 8000
 export const WLK_WS_PATH = '/asr'
-export const WLK_START_TIMEOUT_MS = 60_000
+export const WLK_START_TIMEOUT_MS = 180_000
 
 export interface WlkCommand {
   cmd: string
@@ -178,7 +178,7 @@ export interface WlkServerOptions {
 /**
  * Lifecycle owner of one wlk server process: start() spawns the venv wlk and
  * polls its /asr WebSocket until a probe connection is accepted (timeout
- * default 60s), shutdown() kills the child (the whole process tree on win32 --
+ * default 180s), shutdown() kills the child (the whole process tree on win32 --
  * wlk.exe spawns uvicorn as a child, and an orphaned uvicorn keeps the port
  * bound). Idempotent: shutdown() before start() or after an exit is a no-op.
  *

@@ -109,7 +109,7 @@ describe('WlkServer spawn-failure surfacing (audit plan step 12)', () => {
    *   message -- before any spawn attempt.
    * - start() rejects promptly instead of hanging in the readiness poll: the
    *   session must land in `error` (surfaced on the status chip), never sit
-   *   in `starting` for the full 60 s timeout.
+   *   in `starting` for the full 180 s timeout.
    *
    * This IS the plan's spawn-failure simulation: a real WlkServer resolving a
    * nonexistent WLK_BIN exercises the same code path as pressing Start in the
@@ -123,7 +123,7 @@ describe('WlkServer spawn-failure surfacing (audit plan step 12)', () => {
       const t0 = Date.now()
       await expect(server.start()).rejects.toThrow(/WLK_BIN[\s\S]*missing/)
       // "Not hung in starting": the rejection must be near-instant. A failure
-      // that only surfaces via the 60 s readiness timeout would exceed this.
+      // that only surfaces via the 180 s readiness timeout would exceed this.
       expect(Date.now() - t0).toBeLessThan(5000)
     } finally {
       if (prev === undefined) delete process.env['WLK_BIN']
@@ -426,9 +426,11 @@ describe('WlkServer waitForAsr hanging WebSocket (BUGFIX: reply never sent)', ()
       onerror: (() => void) | null = null
       onclose: (() => void) | null = null
       onmessage: ((ev: unknown) => void) | null = null
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       close(): void {}
     }
-    ;(global as unknown as { WebSocket: unknown }).WebSocket = HangingWebSocket as unknown as typeof WebSocket
+    ;(global as unknown as { WebSocket: unknown }).WebSocket =
+      HangingWebSocket as unknown as typeof WebSocket
 
     const spawned: FakeChild[] = []
     const server = new WlkServer('tiny', {
