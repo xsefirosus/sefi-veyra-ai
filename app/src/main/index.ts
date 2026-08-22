@@ -9,6 +9,7 @@ import { registerDialogHandler } from './persona/dialog'
 import { createPcmSink, feedWavToAdapter, toFiniteFloat32 } from './capture/audio-input'
 import { computeRms, energyCapturedFor, writeLoopbackCheck } from './capture/loopback-energy'
 import { CaptureSession } from './capture/capture-session'
+import { WLK_START_TIMEOUT_MS } from './stt/wlk-server'
 import { createSttAdapter } from '../shared/stt/stt-adapter'
 import { labelForSource } from '../shared/stt/speaker-label'
 import type { TranscriptEvent } from '../shared/types'
@@ -140,6 +141,12 @@ function setupPcmHandlers(): void {
 
 function setupSessionIpc(): void {
   const session = ensureCaptureSession()
+  // Defensive handler timeout: WLK_START_TIMEOUT_MS (60s) is the server's own
+  // deadline, but the handler must ALWAYS settle even if a lower layer hangs
+  // (stuck WebSocket, stuck adapter.connect). Add a buffer so the server's
+  // own rejection wins when it fires, but a stuck promise cannot produce
+  // "reply was never sent" -- the renderer always gets a settlement.
+  const HANDLER_TIMEOUT_MS = WLK_START_TIMEOUT_MS + 5_000
 
   ipcMain.handle('session:start', async (_event, settings: unknown) => {
     // Trust boundary: validate settings shape before delegating
@@ -147,12 +154,42 @@ function setupSessionIpc(): void {
     if (!s || typeof s.sttModel !== 'string') {
       throw new Error('session:start: settings.sttModel is required')
     }
-    try {
+    if (s.sttModel !== 'tiny' && s.sttModel !== 'base' && s.sttModel !== 'small') {
+      throw new Error(`session:start: unsupported sttModel "${String(s.sttModel)}"`)
+    }
+    // sefi: handler-level watchdog -- ceiling is HANDLER_TIMEOUT_MS, upgrade path
+    // is to surface progress (download %) instead of a hard timeout.
+    const startTask = (async (): Promise<{ state: string; lastError: null }> => {
       await session.start(s as { sttModel: 'tiny' | 'base' | 'small' })
       wireSessionAdapters(session)
       broadcastSessionState()
       return { state: session.state, lastError: null }
+    })()
+    const timeoutTask = new Promise<never>((_, reject) => {
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `session:start timed out after ${HANDLER_TIMEOUT_MS}ms waiting for wlk (model download may take minutes; check logs or retry)`
+            )
+          ),
+        HANDLER_TIMEOUT_MS
+      )
+    })
+    try {
+      return await Promise.race([startTask, timeoutTask])
     } catch (err) {
+      // If the race timed out, best-effort teardown so the chip can leave
+      // STARTING and Stop remains usable (captureSession.stop is idempotent
+      // and safe from any state). If startTask later settles, its catch already
+      // transitions to error and broadcasts; this teardown does not interfere.
+      if (err instanceof Error && err.message.includes('timed out after')) {
+        try {
+          await session.stop()
+        } catch {
+          // teardown is best-effort; the error is already being surfaced
+        }
+      }
       broadcastSessionState()
       throw err
     }

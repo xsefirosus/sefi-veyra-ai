@@ -439,8 +439,18 @@ export class WlkServer {
     return new Promise((resolveReady, rejectReady) => {
       let settled = false
       let socket: WebSocket | null = null
+      let deadlineTimer: NodeJS.Timeout | null = null
+      let retryTimer: NodeJS.Timeout | null = null
 
       const cleanup = (): void => {
+        if (deadlineTimer) {
+          clearTimeout(deadlineTimer)
+          deadlineTimer = null
+        }
+        if (retryTimer) {
+          clearTimeout(retryTimer)
+          retryTimer = null
+        }
         if (!socket) return
         socket.onopen = null
         socket.onerror = null
@@ -453,19 +463,35 @@ export class WlkServer {
         socket = null
       }
 
+      const fail = (err: Error): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        rejectReady(err)
+      }
+
+      // Hard deadline: ensure the promise NEVER hangs past startTimeoutMs
+      // even if the WebSocket stays in CONNECTING forever without firing
+      // onclose/onerror (the original hang that produced "reply was never sent").
+      deadlineTimer = setTimeout(() => {
+        fail(
+          new Error(
+            `wlk-server: timed out after ${this.startTimeoutMs}ms waiting for ${this.wsUrl}\n${this.lastLogs()}`
+          )
+        )
+      }, this.startTimeoutMs)
+
       const attempt = (): void => {
         if (settled) return
         const spawnError = getSpawnError()
         if (spawnError) {
-          settled = true
           // Node's spawn errors carry the path ("spawn <path> ENOENT"), so
           // the user sees WHICH binary could not start.
-          rejectReady(new Error(`wlk-server: failed to spawn -- ${spawnError.message}`))
+          fail(new Error(`wlk-server: failed to spawn -- ${spawnError.message}`))
           return
         }
         if (!this.child) {
-          settled = true
-          rejectReady(
+          fail(
             new Error(
               `wlk-server: process exited before ${this.wsUrl} accepted a connection\n${this.lastLogs()}`
             )
@@ -473,16 +499,21 @@ export class WlkServer {
           return
         }
         if (Date.now() >= deadline) {
-          settled = true
-          rejectReady(
+          fail(
             new Error(
               `wlk-server: timed out after ${this.startTimeoutMs}ms waiting for ${this.wsUrl}\n${this.lastLogs()}`
             )
           )
           return
         }
-        socket = new WebSocket(this.wsUrl)
+        try {
+          socket = new WebSocket(this.wsUrl)
+        } catch (err) {
+          fail(err instanceof Error ? err : new Error(String(err)))
+          return
+        }
         socket.onopen = (): void => {
+          if (settled) return
           settled = true
           cleanup()
           resolveReady()
@@ -492,7 +523,13 @@ export class WlkServer {
         }
         socket.onclose = (): void => {
           if (settled) return
-          setTimeout(attempt, this.pollIntervalMs)
+          // Cleanup this socket before scheduling the next attempt so a
+          // hanging socket does not leak.
+          socket!.onopen = null
+          socket!.onerror = null
+          socket!.onclose = null
+          socket = null
+          retryTimer = setTimeout(attempt, this.pollIntervalMs)
         }
       }
 

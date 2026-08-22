@@ -405,3 +405,54 @@ describe('WlkServer crash restart (audit plan step 13)', () => {
     expect(children).toHaveLength(1)
   })
 })
+
+describe('WlkServer waitForAsr hanging WebSocket (BUGFIX: reply never sent)', () => {
+  /**
+   * Seams under test (BUGFIX):
+   * - waitForAsr must ALWAYS settle even if the WebSocket stays in CONNECTING
+   *   forever (never fires onopen/onclose/onerror). The original code relied
+   *   on onclose to schedule the next attempt, so a hanging socket never hit
+   *   the deadline check and the ipcMain.handle promise never settled, producing
+   *   Electron's "reply was never sent" while the chip showed STARTING MODEL.
+   * - The fix adds a hard deadlineTimer (startTimeoutMs) that rejects regardless
+   *   of socket state, and per-dial cleanup, so session:start always returns or
+   *   throws and the chip can show Error with Stop still usable.
+   */
+  it('rejects after startTimeoutMs even when WebSocket hangs forever', async () => {
+    const origWebSocket = (global as unknown as { WebSocket: unknown }).WebSocket
+    // Hanging WebSocket: never calls any handler
+    class HangingWebSocket {
+      onopen: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onclose: (() => void) | null = null
+      onmessage: ((ev: unknown) => void) | null = null
+      close(): void {}
+    }
+    ;(global as unknown as { WebSocket: unknown }).WebSocket = HangingWebSocket as unknown as typeof WebSocket
+
+    const spawned: FakeChild[] = []
+    const server = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      startTimeoutMs: 80,
+      pollIntervalMs: 10,
+      spawnImpl: (() => {
+        const c = new FakeChild(7000 + spawned.length)
+        spawned.push(c)
+        // Keep child alive so the only failure mode is the hanging socket
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+
+    try {
+      const t0 = Date.now()
+      await expect(server.start()).rejects.toThrow(/timed out after 80ms/)
+      const elapsed = Date.now() - t0
+      // Must reject near the deadline, not hang forever (allow generous overhead on CI/win32)
+      expect(elapsed).toBeLessThan(1200)
+      expect(elapsed).toBeGreaterThanOrEqual(30)
+    } finally {
+      ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
+      await server.shutdown().catch(() => {})
+    }
+  })
+})

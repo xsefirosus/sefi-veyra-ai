@@ -174,14 +174,33 @@ export class NodeWsTransport implements WsTransport {
       this.ws = ws
       let opened = false
       let settled = false
+      // Hard guard: a WebSocket stuck in CONNECTING must not hang connect()
+      // forever (the same hang that produced "reply was never sent" in
+      // wlk-server). Fail the dial after 15s so CaptureSession can surface
+      // Error and the handler can settle.
+      const dialTimer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        try {
+          ws.close()
+        } catch {
+          // best-effort
+        }
+        if (this.ws === ws) this.ws = null
+        rejectDial(new Error(`whisper-livekit: WS connect timed out to ${url}`))
+      }, 15_000)
+      const clearDialTimer = (): void => clearTimeout(dialTimer)
       ws.onopen = (): void => {
+        if (settled) return
         opened = true
         settled = true
+        clearDialTimer()
         resolveDial()
       }
       ws.onerror = (): void => {
         if (!opened && !settled) {
           settled = true
+          clearDialTimer()
           rejectDial(new Error(`whisper-livekit: WS error connecting to ${url}`))
         }
       }
@@ -189,12 +208,16 @@ export class NodeWsTransport implements WsTransport {
         if (this.ws === ws) this.ws = null
         if (settled && opened) {
           // Established connection dropped mid-session (audit step 13).
+          clearDialTimer()
           if (!this.closedByCaller) this.scheduleReconnect()
           return
         }
         if (!settled) {
           settled = true
+          clearDialTimer()
           rejectDial(new Error(`whisper-livekit: WS error connecting to ${url}`))
+        } else {
+          clearDialTimer()
         }
       }
       ws.onmessage = (ev): void => {

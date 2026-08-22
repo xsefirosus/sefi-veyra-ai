@@ -26,7 +26,11 @@ function SessionControls({ settings }: SessionControlsProps): React.JSX.Element 
           : 'idle'
 
   const handleToggle = useCallback(async () => {
-    if (busy || isTransitioning) return
+    if (busy) return
+    // Do not start again while transitioning, but ALLOW Stop while starting
+    // (the hang fix: starting must remain cancellable so "reply was never sent"
+    // does not brick the UI; Stop stays enabled during STARTING MODEL).
+    if (isTransitioning && !isActive) return
     setBusy(true)
     setActionError(null)
     try {
@@ -43,7 +47,7 @@ function SessionControls({ settings }: SessionControlsProps): React.JSX.Element 
     }
   }, [busy, isTransitioning, isActive, settings])
 
-  const buttonDisabled = busy || isTransitioning
+  const buttonDisabled = busy || (isTransitioning && !isActive)
   const buttonLabel = isActive ? 'Stop listening' : 'Start listening'
 
   return (
