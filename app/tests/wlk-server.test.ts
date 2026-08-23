@@ -542,9 +542,11 @@ describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', ()
         const c = new FakeChild(7200 + spawned.length)
         spawned.push(c)
         // Feed log lines into wlk-server's rememberLog via stdout event
+        // NOTE: must NOT contain "Uvicorn running" / "Application startup complete"
+        // or the new LOG-BASED readiness primary would resolve instead of timing out.
         setTimeout(() => {
-          c.stdout.emit('data', Buffer.from('Uvicorn running on http://127.0.0.1:8000\n'))
-          c.stderr.emit('data', Buffer.from('Application startup complete\n'))
+          c.stdout.emit('data', Buffer.from('DIAGNOSTIC_LOG_LINE model loading 12345\n'))
+          c.stderr.emit('data', Buffer.from('DIAGNOSTIC_LOG_TAIL second line xyz\n'))
         }, 1)
         return c as unknown as ChildProcess
       }) as SpawnLike
@@ -575,7 +577,7 @@ describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', ()
       spawnImpl: (() => {
         const c = new FakeChild(7300)
         setTimeout(() => {
-          c.stdout.emit('data', Buffer.from('Uvicorn running\n'))
+          c.stdout.emit('data', Buffer.from('DIAGNOSTIC_LOG_XYZ for inclusion check\n'))
         }, 1)
         return c as unknown as ChildProcess
       }) as SpawnLike
@@ -591,7 +593,7 @@ describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', ()
         caught = e instanceof Error ? e : new Error(String(e))
       }
       expect(caught).not.toBeNull()
-      expect(caught!.message).toMatch(/Uvicorn running/)
+      expect(caught!.message).toMatch(/DIAGNOSTIC_LOG_XYZ/)
       expect(caught!.message).toMatch(/last logs/)
     } finally {
       ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket

@@ -500,14 +500,32 @@ export class WlkServer {
             : 'last probe errors: (none captured -- onerror never fired; proxy/Chromium interception suspected)'
         return `wlk-server: timed out after ${this.startTimeoutMs}ms waiting for ${this.wsUrl}\n${probePart}\nlast logs:\n${this.lastLogs()}`
       }
+      // LOG-BASED readiness (primary): WlkServer captures logs via rememberLog into
+      // logTail; Uvicorn emits "Uvicorn running" and "Application startup complete"
+      // when the server is ready. Electron main WebSocket via Chromium is unreliable
+      // behind proxy -- use the log signal as ready without network.
+      const isLogReady = (): boolean => {
+        const logs = this.lastLogs()
+        return logs.includes('Uvicorn running') || logs.includes('Application startup complete')
+      }
       const checkHealth = (): Promise<boolean> => {
-        if (this.healthCheckOverride) return this.healthCheckOverride()
+        if (this.healthCheckOverride) {
+          // Still log health override result for diagnostics (spec: health check logs result)
+          return this.healthCheckOverride().then((ok) => {
+            console.log(`[wlk-server] health check ${ok ? '200 OK' : 'not ready'} for http://${this.host}:${this.port}/health`)
+            return ok
+          }).catch(() => {
+            console.log(`[wlk-server] health check not ready for http://${this.host}:${this.port}/health`)
+            return false
+          })
+        }
         return new Promise((resolve) => {
           const url = `http://${this.host}:${this.port}/health`
           let settledHealth = false
           const done = (ok: boolean): void => {
             if (settledHealth) return
             settledHealth = true
+            console.log(`[wlk-server] health check ${ok ? '200 OK' : 'not ready'} for ${url} (status=${ok ? 200 : 'fail'})`)
             resolve(ok)
           }
           try {
@@ -595,12 +613,23 @@ export class WlkServer {
           fail(new Error(formatTimeoutError()))
           return
         }
+        // LOG-BASED readiness (primary): bypass network -- if logTail already
+        // contains the Uvicorn startup line, resolve immediately without
+        // HTTP/WS. Checked every poll before any network.
+        if (isLogReady() && !settled) {
+          console.log('[wlk-server] ready via logTail (Uvicorn running / Application startup complete) -> resolve')
+          settled = true
+          cleanup()
+          resolveReady()
+          return
+        }
         // HTTP health fallback: every iteration try GET /health with 2s timeout.
         // If it returns 200, the HTTP server is up (Uvicorn running) even if
         // the WS handshake is blocked by proxy/Chromium interception.
         try {
           const healthy = await checkHealth()
           if (healthy && !settled) {
+            console.log('[wlk-server] health 200 OK -> ready (fallback)')
             settled = true
             cleanup()
             resolveReady()
@@ -630,6 +659,7 @@ export class WlkServer {
         }
         socket.onopen = (): void => {
           if (settled) return
+          console.log('[wlk-server] WS /asr accepted/open -> ready')
           settled = true
           cleanup()
           resolveReady()
