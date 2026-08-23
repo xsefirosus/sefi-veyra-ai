@@ -68,7 +68,13 @@ export const WLK_DEFAULT_HOST = '127.0.0.1'
 // config.py:28). See the header comment for why this is 8000, not 9090.
 export const WLK_DEFAULT_PORT = 8000
 export const WLK_WS_PATH = '/asr'
-export const WLK_START_TIMEOUT_MS = 180_000
+/**
+ * Warmup budget: 300s. Real-machine measurement showed first-launch warmup
+ * (AV scanning every venv python DLL on each launch) can exceed 180s; 300s
+ * covers cold AV-scanned starts while the handler watchdog in index.ts stays
+ * above it (WLK_START_TIMEOUT_MS + 5_000 = 305_000).
+ */
+export const WLK_START_TIMEOUT_MS = 300_000
 
 export interface WlkCommand {
   cmd: string
@@ -185,8 +191,8 @@ export interface WlkServerOptions {
 
 /**
  * Lifecycle owner of one wlk server process: start() spawns the venv wlk and
- * polls its /asr WebSocket until a probe connection is accepted (timeout
- * default 180s), shutdown() kills the child (the whole process tree on win32 --
+   * polls its /asr WebSocket until a probe connection is accepted (timeout
+   * default 300s), shutdown() kills the child (the whole process tree on win32 --
  * wlk.exe spawns uvicorn as a child, and an orphaned uvicorn keeps the port
  * bound). Idempotent: shutdown() before start() or after an exit is a no-op.
  *
@@ -475,17 +481,28 @@ export class WlkServer {
    * returns 200 consider server ready even if WS handshake fails due to
    * proxy/Chromium interception).
    *
+   * BUGFIX (readiness race): the hard deadlineTimer AND both attempt-loop
+   * deadline branches consult isLogReady() FIRST -- if the Uvicorn banner lands
+   * at t=deadline+epsilon, resolve ("ready via logTail at deadline") instead of
+   * letting fail() win by milliseconds while the server is in fact ready.
+   *
+   * Observability: a progress line every 15s
+   * ("waiting for wlk readiness Xs elapsed childAlive=... logReady=...") so a
+   * stall is diagnosable from the console alone.
+   *
    * `getSpawnError` surfaces an asynchronous spawn failure (audit step 12):
    * when the child could not be spawned at all, reject immediately with that
    * error instead of polling a process that will never listen.
    */
   private waitForAsr(getSpawnError: () => Error | null = () => null): Promise<void> {
-    const deadline = Date.now() + this.startTimeoutMs
+    const startedAt = Date.now()
+    const deadline = startedAt + this.startTimeoutMs
     return new Promise((resolveReady, rejectReady) => {
       let settled = false
       let socket: WebSocket | null = null
       let deadlineTimer: NodeJS.Timeout | null = null
       let retryTimer: NodeJS.Timeout | null = null
+      let progressTimer: NodeJS.Timeout | null = null
       const lastProbeErrors: string[] = []
       const MAX_PROBE_ERRORS = 5
       const pushProbeError = (msg: string): void => {
@@ -566,6 +583,10 @@ export class WlkServer {
           clearTimeout(retryTimer)
           retryTimer = null
         }
+        if (progressTimer) {
+          clearInterval(progressTimer)
+          progressTimer = null
+        }
         if (!socket) return
         socket.onopen = null
         socket.onerror = null
@@ -585,12 +606,37 @@ export class WlkServer {
         rejectReady(err)
       }
 
+      // Readiness-race fix: called from the hard deadlineTimer and both
+      // attempt-loop deadline branches BEFORE failing. If the Uvicorn banner
+      // landed at (or a hair past) the deadline, the server IS ready -- resolve
+      // instead of letting the timeout win by milliseconds.
+      const resolveIfLogReadyAtDeadline = (): boolean => {
+        if (!isLogReady()) return false
+        if (settled) return true
+        console.log('[wlk-server] ready via logTail at deadline')
+        settled = true
+        cleanup()
+        resolveReady()
+        return true
+      }
+
       // Hard deadline: ensure the promise NEVER hangs past startTimeoutMs
       // even if the WebSocket stays in CONNECTING forever without firing
       // onclose/onerror (the original hang that produced "reply was never sent").
+      // Guard first: a log-ready server resolves here instead of failing.
       deadlineTimer = setTimeout(() => {
+        if (resolveIfLogReadyAtDeadline()) return
         fail(new Error(formatTimeoutError()))
       }, this.startTimeoutMs)
+
+      // Periodic progress line so future stalls are diagnosable from the
+      // console alone (15s cadence; cleared by cleanup() on any settlement).
+      progressTimer = setInterval(() => {
+        const elapsedS = Math.round((Date.now() - startedAt) / 1000)
+        console.log(
+          `[wlk-server] waiting for wlk readiness ${elapsedS}s elapsed childAlive=${this.child !== null} logReady=${isLogReady()}`
+        )
+      }, 15_000)
 
       const attempt = async (): Promise<void> => {
         if (settled) return
@@ -610,6 +656,7 @@ export class WlkServer {
           return
         }
         if (Date.now() >= deadline) {
+          if (resolveIfLogReadyAtDeadline()) return
           fail(new Error(formatTimeoutError()))
           return
         }
@@ -648,6 +695,7 @@ export class WlkServer {
           return
         }
         if (Date.now() >= deadline) {
+          if (resolveIfLogReadyAtDeadline()) return
           fail(new Error(formatTimeoutError()))
           return
         }

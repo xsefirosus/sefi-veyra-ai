@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import type { ChildProcess } from 'child_process'
 import { tmpdir } from 'os'
@@ -107,9 +107,9 @@ describe('WlkServer spawn-failure surfacing (audit plan step 12)', () => {
    * - WLK_BIN env override gets the same existence check as the default venv
    *   resolution, so a bogus path fails FAST at start() with the path in the
    *   message -- before any spawn attempt.
-   * - start() rejects promptly instead of hanging in the readiness poll: the
-   *   session must land in `error` (surfaced on the status chip), never sit
-   *   in `starting` for the full 180 s timeout.
+    * - start() rejects promptly instead of hanging in the readiness poll: the
+    *   session must land in `error` (surfaced on the status chip), never sit
+    *   in `starting` for the full readiness timeout.
    *
    * This IS the plan's spawn-failure simulation: a real WlkServer resolving a
    * nonexistent WLK_BIN exercises the same code path as pressing Start in the
@@ -461,6 +461,73 @@ describe('WlkServer waitForAsr hanging WebSocket (BUGFIX: reply never sent)', ()
   })
 })
 
+describe('WlkServer BUGFIX: deadline-timer resolves when log-ready (race)', () => {
+  /**
+   * Seams under test (readiness-race follow-up):
+   * - The hard deadlineTimer at startTimeoutMs used to call fail() UNCONDITIONALLY:
+   *   if the Uvicorn banner ("Application startup complete") landed at t=deadline+eps,
+   *   the timeout won by milliseconds even though the server IS ready. The fix makes
+   *   BOTH the deadlineTimer callback AND the attempt-loop deadline branches consult
+   *   isLogReady() FIRST and RESOLVE (with a "ready via logTail at deadline" log)
+   *   instead of rejecting.
+   *
+   * Determinism: the probe WebSocket hangs forever (never fires onclose), so NO retry
+   * attempt is ever scheduled -- the ONLY settling paths are the first attempt's
+   * checks (isLogReady=false at that point) and the deadlineTimer. Logs land mid-wait
+   * (t=40ms of a 150ms budget): without the fix this test's start() REJECTS with
+   * /timed out after/, with the fix it RESOLVES.
+   */
+  it('deadline timer resolves instead of failing when logs show ready', async () => {
+    const origWebSocket = (global as unknown as { WebSocket: unknown }).WebSocket
+    class HangingWebSocket {
+      onopen: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onclose: (() => void) | null = null
+      onmessage: ((ev: unknown) => void) | null = null
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      close(): void {}
+    }
+    ;(global as unknown as { WebSocket: unknown }).WebSocket =
+      HangingWebSocket as unknown as typeof WebSocket
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spawned: FakeChild[] = []
+    const server = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      startTimeoutMs: 150,
+      pollIntervalMs: 10,
+      // Health fallback must stay FALSE: this isolates the LOG-based rescue path.
+      healthCheckImpl: () => Promise.resolve(false),
+      spawnImpl: (() => {
+        const c = new FakeChild(7500 + spawned.length)
+        spawned.push(c)
+        // Uvicorn banner lands MID-WAIT, after attempt #1 checked isLogReady (false)
+        // and dialed the hanging socket -- exactly the race window.
+        setTimeout(() => {
+          c.stdout.emit('data', Buffer.from('INFO:     Application startup complete.\n'))
+        }, 40)
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+
+    try {
+      const t0 = Date.now()
+      await expect(server.start()).resolves.toBeUndefined()
+      const elapsed = Date.now() - t0
+      // Resolved BY the deadline rescue (not instantly, not hung past it).
+      expect(elapsed).toBeGreaterThanOrEqual(100)
+      expect(elapsed).toBeLessThan(2000)
+      expect(logSpy.mock.calls.some((args) => args.join(' ').includes('ready via logTail at deadline'))).toBe(
+        true
+      )
+    } finally {
+      logSpy.mockRestore()
+      ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
+      await server.shutdown().catch(() => {})
+    }
+  })
+})
+
 describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', () => {
   /**
    * Seams under test (BUGFIX follow-up):
@@ -468,9 +535,9 @@ describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', ()
    *   includes last N failures + lastLogs in timeout error (the user saw
    *   "timed out after 180000ms" with Uvicorn logs showing ready but no WS
    *   diagnostic).
-   * - HTTP health fallback: GET http://127.0.0.1:8000/health with 2s timeout
-   *   every iteration -- if health 200, server is ready even when WS handshake
-   *   is blocked by proxy/Chromium interception. Keep 180s timeout.
+    * - HTTP health fallback: GET http://127.0.0.1:8000/health with 2s timeout
+    *   every iteration -- if health 200, server is ready even when WS handshake
+    *   is blocked by proxy/Chromium interception.
    * - Spawn logs proxy env once and sets NO_PROXY=127.0.0.1,localhost for child.
    */
   it('resolves via health check even when WebSocket hangs forever', async () => {
