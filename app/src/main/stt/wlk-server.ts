@@ -53,6 +53,7 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
+import * as http from 'http'
 import { dirname, join, resolve } from 'path'
 
 /** Injectable spawn seam (audit step 13): structural twin of child_process.spawn. */
@@ -173,6 +174,13 @@ export interface WlkServerOptions {
    * rejecting while this.child is absent (a dead child can never be ready).
    */
   probeImpl?: () => Promise<void>
+  /**
+   * Injectable HTTP health check (unit tests only): returns true when
+   * GET http://host:port/health is 200. Defaults to a real Node http.get with
+   * 2s timeout. Used as fallback when WS handshake fails due to proxy/Chromium
+   * interception -- if health is 200 the server is considered ready.
+   */
+  healthCheckImpl?: () => Promise<boolean>
 }
 
 /**
@@ -209,6 +217,7 @@ export class WlkServer {
   private readonly restartBaseDelayMs: number
   private readonly spawnImpl: SpawnLike
   private readonly probeOverride: (() => Promise<void>) | null
+  private readonly healthCheckOverride: (() => Promise<boolean>) | null
   private child: ChildProcess | null = null
   private logTail: string[] = []
   // --- restart state (audit step 13) ---
@@ -242,6 +251,7 @@ export class WlkServer {
     this.restartBaseDelayMs = opts.restartBaseDelayMs ?? 1000
     this.spawnImpl = opts.spawnImpl ?? spawn
     this.probeOverride = opts.probeImpl ?? null
+    this.healthCheckOverride = opts.healthCheckImpl ?? null
   }
 
   /**
@@ -285,19 +295,48 @@ export class WlkServer {
     // step-14 probe note.
     args.push('--pcm-input')
     this.logTail = []
+    // BUGFIX: log proxy env once at spawn (proxy/Chromium interception caused WS
+    // handshake to fail while HTTP was up -- Uvicorn running but probe timed out).
+    // Also set NO_PROXY for child so wlk bypasses any system proxy for loopback.
+    {
+      const proxyKeys = [
+        'HTTP_PROXY',
+        'http_proxy',
+        'HTTPS_PROXY',
+        'https_proxy',
+        'NO_PROXY',
+        'no_proxy'
+      ]
+      const proxySnapshot: Record<string, string> = {}
+      for (const k of proxyKeys) if (process.env[k]) proxySnapshot[k] = process.env[k] as string
+      console.log(
+        `[wlk-server] spawning ${cmd} ${args.join(' ')} host=${this.host} port=${this.port} proxy=${JSON.stringify(proxySnapshot)}`
+      )
+    }
     // Audit step 12: a spawn that cannot even start (bad binary, ENOENT,
     // EACCES) emits 'error' asynchronously -- with no listener Node turns it
     // into an uncaught exception, and the readiness poll below would keep
     // polling until the full timeout because 'exit' never fires. Capture it
     // so waitForAsr() can reject promptly with the real reason.
     let spawnError: Error | null = null
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      CUDA_VISIBLE_DEVICES: process.env.CUDA_VISIBLE_DEVICES ?? '-1',
+      // Bypass proxy for loopback: wlk binds 127.0.0.1 and probe uses same.
+      NO_PROXY: process.env.NO_PROXY
+        ? `${process.env.NO_PROXY},127.0.0.1,localhost`
+        : '127.0.0.1,localhost',
+      no_proxy: process.env.no_proxy
+        ? `${process.env.no_proxy},127.0.0.1,localhost`
+        : '127.0.0.1,localhost'
+    }
     const child = this.spawnImpl(cmd, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
       // CPU-only (see header): faster-whisper device=auto picks CUDA on this
       // machine but the venv lacks cublas64_12.dll; -1 forces CPU. Respect an
       // explicit CUDA_VISIBLE_DEVICES override if the caller set one.
-      env: { ...process.env, CUDA_VISIBLE_DEVICES: process.env.CUDA_VISIBLE_DEVICES ?? '-1' }
+      env: childEnv
     })
     this.child = child
     child.stdout?.on('data', (d: Buffer) => this.rememberLog(d))
@@ -430,6 +469,12 @@ export class WlkServer {
    * passes. Uses the runtime's global WebSocket (Node >= 22 / Electron main);
    * no extra dependency (minimization ladder rung 4).
    *
+   * BUGFIX: capture socket.onerror message into lastProbeError, include last N
+   * failures + lastLogs in timeout error, and add HTTP health fallback
+   * (GET http://host:port/health with 2s timeout every iteration -- if health
+   * returns 200 consider server ready even if WS handshake fails due to
+   * proxy/Chromium interception).
+   *
    * `getSpawnError` surfaces an asynchronous spawn failure (audit step 12):
    * when the child could not be spawned at all, reject immediately with that
    * error instead of polling a process that will never listen.
@@ -441,6 +486,58 @@ export class WlkServer {
       let socket: WebSocket | null = null
       let deadlineTimer: NodeJS.Timeout | null = null
       let retryTimer: NodeJS.Timeout | null = null
+      const lastProbeErrors: string[] = []
+      const MAX_PROBE_ERRORS = 5
+      const pushProbeError = (msg: string): void => {
+        const line = msg.slice(0, 600)
+        lastProbeErrors.push(line)
+        if (lastProbeErrors.length > MAX_PROBE_ERRORS) lastProbeErrors.shift()
+      }
+      const formatTimeoutError = (): string => {
+        const probePart =
+          lastProbeErrors.length > 0
+            ? `last probe errors (${lastProbeErrors.length}):\n${lastProbeErrors.join('\n')}`
+            : 'last probe errors: (none captured -- onerror never fired; proxy/Chromium interception suspected)'
+        return `wlk-server: timed out after ${this.startTimeoutMs}ms waiting for ${this.wsUrl}\n${probePart}\nlast logs:\n${this.lastLogs()}`
+      }
+      const checkHealth = (): Promise<boolean> => {
+        if (this.healthCheckOverride) return this.healthCheckOverride()
+        return new Promise((resolve) => {
+          const url = `http://${this.host}:${this.port}/health`
+          let settledHealth = false
+          const done = (ok: boolean): void => {
+            if (settledHealth) return
+            settledHealth = true
+            resolve(ok)
+          }
+          try {
+            const req = http.get(url, (res) => {
+              const ok = res.statusCode === 200
+              res.resume()
+              // drain then resolve
+              res.on('end', () => done(ok))
+              // In case no body, end may never fire quickly -- also resolve on response
+              if (res.statusCode === 200) {
+                // give a tick for end, but also resolve immediately if body empty
+                setTimeout(() => done(ok), 50)
+              } else {
+                done(ok)
+              }
+            })
+            req.on('error', () => done(false))
+            req.setTimeout(2000, () => {
+              try {
+                req.destroy()
+              } catch {
+                // ignore
+              }
+              done(false)
+            })
+          } catch {
+            done(false)
+          }
+        })
+      }
 
       const cleanup = (): void => {
         if (deadlineTimer) {
@@ -474,14 +571,10 @@ export class WlkServer {
       // even if the WebSocket stays in CONNECTING forever without firing
       // onclose/onerror (the original hang that produced "reply was never sent").
       deadlineTimer = setTimeout(() => {
-        fail(
-          new Error(
-            `wlk-server: timed out after ${this.startTimeoutMs}ms waiting for ${this.wsUrl}\n${this.lastLogs()}`
-          )
-        )
+        fail(new Error(formatTimeoutError()))
       }, this.startTimeoutMs)
 
-      const attempt = (): void => {
+      const attempt = async (): Promise<void> => {
         if (settled) return
         const spawnError = getSpawnError()
         if (spawnError) {
@@ -499,11 +592,34 @@ export class WlkServer {
           return
         }
         if (Date.now() >= deadline) {
+          fail(new Error(formatTimeoutError()))
+          return
+        }
+        // HTTP health fallback: every iteration try GET /health with 2s timeout.
+        // If it returns 200, the HTTP server is up (Uvicorn running) even if
+        // the WS handshake is blocked by proxy/Chromium interception.
+        try {
+          const healthy = await checkHealth()
+          if (healthy && !settled) {
+            settled = true
+            cleanup()
+            resolveReady()
+            return
+          }
+        } catch {
+          // health check is best-effort fallback; WS remains primary
+        }
+        if (settled) return
+        if (!this.child) {
           fail(
             new Error(
-              `wlk-server: timed out after ${this.startTimeoutMs}ms waiting for ${this.wsUrl}\n${this.lastLogs()}`
+              `wlk-server: process exited before ${this.wsUrl} accepted a connection\n${this.lastLogs()}`
             )
           )
+          return
+        }
+        if (Date.now() >= deadline) {
+          fail(new Error(formatTimeoutError()))
           return
         }
         try {
@@ -518,22 +634,60 @@ export class WlkServer {
           cleanup()
           resolveReady()
         }
-        socket.onerror = (): void => {
-          // A failed connect is followed by onclose, where the retry happens.
-        }
+        socket.onerror = ((ev: unknown): void => {
+          // Capture the real error message for timeout diagnostics.
+          let msg = 'WS error'
+          try {
+            if (ev && typeof ev === 'object') {
+              const o = ev as Record<string, unknown>
+              if (typeof o['message'] === 'string' && (o['message'] as string).length > 0)
+                msg = o['message'] as string
+              else if (o['error'] && typeof o['error'] === 'object') {
+                const inner = o['error'] as Record<string, unknown>
+                if (typeof inner['message'] === 'string') msg = inner['message'] as string
+                else msg = String(o['error'])
+              } else if (typeof o['type'] === 'string') msg = `WS ${o['type']} event`
+              else msg = JSON.stringify(o).slice(0, 400)
+            } else if (typeof ev === 'string' && ev.length > 0) msg = ev
+            else if (ev) msg = String(ev)
+          } catch {
+            msg = String(ev)
+          }
+          pushProbeError(msg)
+        }) as unknown as (ev: Event) => void
         socket.onclose = (): void => {
           if (settled) return
+          // Capture close as a probe error too when onerror never fired
+          // (some WS impls fire only onclose with code/reason).
+          if (lastProbeErrors.length === 0) {
+            try {
+              const c = socket as unknown as { code?: number; reason?: string }
+              if (c && typeof c.code === 'number')
+                pushProbeError(
+                  `WS close code=${c.code} reason=${String(c.reason ?? '')}`.slice(0, 400)
+                )
+            } catch {
+              // ignore
+            }
+          }
           // Cleanup this socket before scheduling the next attempt so a
           // hanging socket does not leak.
-          socket!.onopen = null
-          socket!.onerror = null
-          socket!.onclose = null
-          socket = null
-          retryTimer = setTimeout(attempt, this.pollIntervalMs)
+          if (socket) {
+            socket.onopen = null
+            socket.onerror = null
+            socket.onclose = null
+            try {
+              socket.close()
+            } catch {
+              // ignore
+            }
+            socket = null
+          }
+          retryTimer = setTimeout(() => void attempt(), this.pollIntervalMs)
         }
       }
 
-      attempt()
+      void attempt()
     })
   }
 }

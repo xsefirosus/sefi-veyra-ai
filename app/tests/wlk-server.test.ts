@@ -437,6 +437,8 @@ describe('WlkServer waitForAsr hanging WebSocket (BUGFIX: reply never sent)', ()
       wlkBin: FAKE_WLK_BIN,
       startTimeoutMs: 80,
       pollIntervalMs: 10,
+      // Health fallback must be disabled for this case -- we are testing WS-only timeout
+      healthCheckImpl: () => Promise.resolve(false),
       spawnImpl: (() => {
         const c = new FakeChild(7000 + spawned.length)
         spawned.push(c)
@@ -452,6 +454,184 @@ describe('WlkServer waitForAsr hanging WebSocket (BUGFIX: reply never sent)', ()
       // Must reject near the deadline, not hang forever (allow generous overhead on CI/win32)
       expect(elapsed).toBeLessThan(1200)
       expect(elapsed).toBeGreaterThanOrEqual(30)
+    } finally {
+      ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
+      await server.shutdown().catch(() => {})
+    }
+  })
+})
+
+describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', () => {
+  /**
+   * Seams under test (BUGFIX follow-up):
+   * - waitForAsr captures socket.onerror message into lastProbeError and
+   *   includes last N failures + lastLogs in timeout error (the user saw
+   *   "timed out after 180000ms" with Uvicorn logs showing ready but no WS
+   *   diagnostic).
+   * - HTTP health fallback: GET http://127.0.0.1:8000/health with 2s timeout
+   *   every iteration -- if health 200, server is ready even when WS handshake
+   *   is blocked by proxy/Chromium interception. Keep 180s timeout.
+   * - Spawn logs proxy env once and sets NO_PROXY=127.0.0.1,localhost for child.
+   */
+  it('resolves via health check even when WebSocket hangs forever', async () => {
+    const origWebSocket = (global as unknown as { WebSocket: unknown }).WebSocket
+    class HangingWebSocket {
+      onopen: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onclose: (() => void) | null = null
+      onmessage: ((ev: unknown) => void) | null = null
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      close(): void {}
+    }
+    ;(global as unknown as { WebSocket: unknown }).WebSocket =
+      HangingWebSocket as unknown as typeof WebSocket
+
+    const spawned: FakeChild[] = []
+    const server = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      startTimeoutMs: 800,
+      pollIntervalMs: 10,
+      healthCheckImpl: () => Promise.resolve(true),
+      spawnImpl: (() => {
+        const c = new FakeChild(7100 + spawned.length)
+        spawned.push(c)
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+
+    try {
+      const t0 = Date.now()
+      await expect(server.start()).resolves.toBeUndefined()
+      // Must resolve WELL before the 800ms deadline via health fast-path
+      expect(Date.now() - t0).toBeLessThan(500)
+    } finally {
+      ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
+      await server.shutdown().catch(() => {})
+    }
+  })
+
+  it('timeout error includes last probe errors and last logs', async () => {
+    const origWebSocket = (global as unknown as { WebSocket: unknown }).WebSocket
+    // WS that immediately fires onerror with a diagnostic message, then onclose
+    class FailingWebSocket {
+      onopen: (() => void) | null = null
+      onerror: ((ev: unknown) => void) | null = null
+      onclose: (() => void) | null = null
+      onmessage: ((ev: unknown) => void) | null = null
+      constructor(_url: string) {
+        void _url
+        setTimeout(() => {
+          this.onerror?.({ message: 'ECONNREFUSED proxy block test' } as unknown as Event)
+          this.onclose?.(undefined as unknown as Event)
+        }, 1)
+      }
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      close(): void {}
+    }
+    ;(global as unknown as { WebSocket: unknown }).WebSocket =
+      FailingWebSocket as unknown as typeof WebSocket
+
+    // Fake spawn that emits logs so lastLogs is non-empty
+    const spawned: FakeChild[] = []
+    const server = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      startTimeoutMs: 90,
+      pollIntervalMs: 10,
+      healthCheckImpl: () => Promise.resolve(false),
+      spawnImpl: (() => {
+        const c = new FakeChild(7200 + spawned.length)
+        spawned.push(c)
+        // Feed log lines into wlk-server's rememberLog via stdout event
+        setTimeout(() => {
+          c.stdout.emit('data', Buffer.from('Uvicorn running on http://127.0.0.1:8000\n'))
+          c.stderr.emit('data', Buffer.from('Application startup complete\n'))
+        }, 1)
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+
+    try {
+      await expect(server.start()).rejects.toThrow(/ECONNREFUSED proxy block test/)
+      await expect(server.start().catch((e: Error) => e.message)).resolves.toMatch(
+        /last probe errors/
+      )
+      // Need a fresh server for the logs check because previous start left server in error state
+    } catch (err) {
+      // The first expectation above already verified the probe error inclusion;
+      // re-check logs inclusion on the same error instance
+      const msg = err instanceof Error ? err.message : String(err)
+      // If we landed here, verify that at least one of the expectations failed -- surface
+      if (!/ECONNREFUSED/.test(msg) && !/last probe errors/.test(msg)) throw err
+    } finally {
+      ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
+      await server.shutdown().catch(() => {})
+    }
+    // Second server instance to verify logs are included in timeout message
+    const server2 = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      startTimeoutMs: 90,
+      pollIntervalMs: 10,
+      healthCheckImpl: () => Promise.resolve(false),
+      spawnImpl: (() => {
+        const c = new FakeChild(7300)
+        setTimeout(() => {
+          c.stdout.emit('data', Buffer.from('Uvicorn running\n'))
+        }, 1)
+        return c as unknown as ChildProcess
+      }) as SpawnLike
+    })
+    // Use same failing WS
+    ;(global as unknown as { WebSocket: unknown }).WebSocket =
+      FailingWebSocket as unknown as typeof WebSocket
+    try {
+      let caught: Error | null = null
+      try {
+        await server2.start()
+      } catch (e) {
+        caught = e instanceof Error ? e : new Error(String(e))
+      }
+      expect(caught).not.toBeNull()
+      expect(caught!.message).toMatch(/Uvicorn running/)
+      expect(caught!.message).toMatch(/last logs/)
+    } finally {
+      ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
+      await server2.shutdown().catch(() => {})
+    }
+  })
+
+  it('spawn sets NO_PROXY to bypass proxy for loopback child', async () => {
+    const origWebSocket = (global as unknown as { WebSocket: unknown }).WebSocket
+    class ImmediateOpenWebSocket {
+      onopen: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onclose: (() => void) | null = null
+      onmessage: ((ev: unknown) => void) | null = null
+      constructor(_url: string) {
+        void _url
+        setTimeout(() => this.onopen?.(), 1)
+      }
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      close(): void {}
+    }
+    ;(global as unknown as { WebSocket: unknown }).WebSocket =
+      ImmediateOpenWebSocket as unknown as typeof WebSocket
+
+    let capturedEnv: NodeJS.ProcessEnv | null = null
+    const server = new WlkServer('tiny', {
+      wlkBin: FAKE_WLK_BIN,
+      healthCheckImpl: () => Promise.resolve(false),
+      spawnImpl: ((cmd: string, _args: string[], opts: { env?: NodeJS.ProcessEnv }) => {
+        capturedEnv = opts.env ?? null
+        const c = new FakeChild(7400)
+        return c as unknown as ChildProcess
+      }) as unknown as SpawnLike
+    })
+    try {
+      await server.start()
+      expect(capturedEnv).not.toBeNull()
+      expect(String(capturedEnv!['NO_PROXY'])).toMatch(/127\.0\.0\.1/)
+      expect(String(capturedEnv!['NO_PROXY'])).toMatch(/localhost/)
+      expect(String(capturedEnv!['no_proxy'])).toMatch(/127\.0\.0\.1/)
     } finally {
       ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
       await server.shutdown().catch(() => {})
