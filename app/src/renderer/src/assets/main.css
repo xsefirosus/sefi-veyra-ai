@@ -493,10 +493,14 @@ body {
    (oklch 100% /0.7 + blur 6px, rounded, soft shadow) replacing the plain
    dark bar, for the Listening/transcript-tail state. Generating/Ready states
    arrive in step 16. */
+/* Checkpoint follow-up: the card fills the window (flex:1) so resizing the
+   overlay taller grows the glass card itself; the transcript tail is pinned to
+   the bottom INSIDE the card (justify-content:flex-end moved off .overlay-screen
+   onto .overlay-card), so there is no dead space above the card. The drag
+   region stays on the whole surface. */
 .overlay-screen {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   height: 100vh;
   padding: 0.5rem;
   overflow: hidden;
@@ -505,8 +509,10 @@ body {
 }
 
 .overlay-card {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: 0.25rem;
   padding: 0.625rem 0.875rem;
   background: oklch(100% 0 0 / 0.7);
