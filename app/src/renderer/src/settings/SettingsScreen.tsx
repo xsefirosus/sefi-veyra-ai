@@ -24,7 +24,7 @@ import { deviceOptions, type AudioDeviceOption } from './device-options'
 import type { CaptureMode } from '../capture/mic-capture'
 import PersonaPanel from '../persona/PersonaPanel'
 
-const STT_MODELS: SttModel[] = ['tiny', 'base', 'small']
+const STT_MODELS: SttModel[] = ['tiny', 'base', 'small', 'medium', 'large-v3']
 
 /* Quiet Glass inline icon set — stroke-based, no icon font, no emoji.
    Path data copied verbatim from the published canvas Main.dc.html (page "Veyra"). */
@@ -451,6 +451,10 @@ function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
               </option>
             ))}
           </select>
+          <span className="settings-hint">
+            tiny / base are fastest on CPU. medium / large-v3 are more accurate but may lag 5-15s on
+            CPU-only (faster-whisper via whisperlivekit).
+          </span>
         </label>
 
         <label className="settings-field">

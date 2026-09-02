@@ -36,7 +36,11 @@ export function isSettings(value: unknown): value is Settings {
   const v = value as Record<string, unknown>
   return (
     typeof v['apiKey'] === 'string' &&
-    (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
+    (v['sttModel'] === 'tiny' ||
+      v['sttModel'] === 'base' ||
+      v['sttModel'] === 'small' ||
+      v['sttModel'] === 'medium' ||
+      v['sttModel'] === 'large-v3') &&
     (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null) &&
     (v['theme'] === 'light' || v['theme'] === 'dark') &&
     typeof v['overlayOpacity'] === 'number' &&
@@ -80,7 +84,11 @@ export function load(): Settings {
         const v = parsed as Record<string, unknown>
         const baseValid =
           typeof v['apiKey'] === 'string' &&
-          (v['sttModel'] === 'tiny' || v['sttModel'] === 'base' || v['sttModel'] === 'small') &&
+          (v['sttModel'] === 'tiny' ||
+            v['sttModel'] === 'base' ||
+            v['sttModel'] === 'small' ||
+            v['sttModel'] === 'medium' ||
+            v['sttModel'] === 'large-v3') &&
           (typeof v['audioDeviceId'] === 'string' || v['audioDeviceId'] === null)
         if (baseValid) {
           const themeValid = v['theme'] === 'light' || v['theme'] === 'dark'

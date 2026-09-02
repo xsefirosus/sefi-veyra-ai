@@ -1,4 +1,4 @@
-export type SttModel = 'tiny' | 'base' | 'small'
+export type SttModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export type Theme = 'light' | 'dark'
 

@@ -156,13 +156,19 @@ function setupSessionIpc(): void {
     if (!s || typeof s.sttModel !== 'string') {
       throw new Error('session:start: settings.sttModel is required')
     }
-    if (s.sttModel !== 'tiny' && s.sttModel !== 'base' && s.sttModel !== 'small') {
+    if (
+      s.sttModel !== 'tiny' &&
+      s.sttModel !== 'base' &&
+      s.sttModel !== 'small' &&
+      s.sttModel !== 'medium' &&
+      s.sttModel !== 'large-v3'
+    ) {
       throw new Error(`session:start: unsupported sttModel "${String(s.sttModel)}"`)
     }
     // sefi: handler-level watchdog -- ceiling is HANDLER_TIMEOUT_MS, upgrade path
     // is to surface progress (download %) instead of a hard timeout.
     const startTask = (async (): Promise<{ state: string; lastError: null }> => {
-      await session.start(s as { sttModel: 'tiny' | 'base' | 'small' })
+      await session.start(s as { sttModel: 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' })
       wireSessionAdapters(session)
       broadcastSessionState()
       return { state: session.state, lastError: null }

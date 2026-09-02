@@ -39,8 +39,8 @@ import {
 const FAKE_WLK_BIN = '/fake/venv/bin/wlk'
 
 describe('buildWlkCommand', () => {
-  it('maps tiny, base and small to the venv wlk with the confirmed flags', () => {
-    for (const model of ['tiny', 'base', 'small'] as const) {
+  it('maps tiny, base, small, medium and large-v3 to the venv wlk with the confirmed flags', () => {
+    for (const model of ['tiny', 'base', 'small', 'medium', 'large-v3'] as const) {
       const { cmd, args } = buildWlkCommand(model, FAKE_WLK_BIN)
       expect(cmd).toBe(FAKE_WLK_BIN)
       // Exact argv: the flags were confirmed from `wlk serve --help` /
@@ -60,8 +60,8 @@ describe('buildWlkCommand', () => {
     expect(WLK_WS_PATH).toBe('/asr')
   })
 
-  it('rejects any model other than tiny/base/small', () => {
-    const badModels: WlkModel[] = ['medium', 'large-v3', 'tiny.en', 'garbage'] as WlkModel[]
+  it('rejects any model other than tiny/base/small/medium/large-v3', () => {
+    const badModels: WlkModel[] = ['tiny.en', 'garbage', 'large', 'huge'] as WlkModel[]
     for (const bad of badModels) {
       expect(() => buildWlkCommand(bad, FAKE_WLK_BIN)).toThrow(/unsupported model/)
     }
@@ -107,9 +107,9 @@ describe('WlkServer spawn-failure surfacing (audit plan step 12)', () => {
    * - WLK_BIN env override gets the same existence check as the default venv
    *   resolution, so a bogus path fails FAST at start() with the path in the
    *   message -- before any spawn attempt.
-    * - start() rejects promptly instead of hanging in the readiness poll: the
-    *   session must land in `error` (surfaced on the status chip), never sit
-    *   in `starting` for the full readiness timeout.
+   * - start() rejects promptly instead of hanging in the readiness poll: the
+   *   session must land in `error` (surfaced on the status chip), never sit
+   *   in `starting` for the full readiness timeout.
    *
    * This IS the plan's spawn-failure simulation: a real WlkServer resolving a
    * nonexistent WLK_BIN exercises the same code path as pressing Start in the
@@ -517,9 +517,9 @@ describe('WlkServer BUGFIX: deadline-timer resolves when log-ready (race)', () =
       // Resolved BY the deadline rescue (not instantly, not hung past it).
       expect(elapsed).toBeGreaterThanOrEqual(100)
       expect(elapsed).toBeLessThan(2000)
-      expect(logSpy.mock.calls.some((args) => args.join(' ').includes('ready via logTail at deadline'))).toBe(
-        true
-      )
+      expect(
+        logSpy.mock.calls.some((args) => args.join(' ').includes('ready via logTail at deadline'))
+      ).toBe(true)
     } finally {
       logSpy.mockRestore()
       ;(global as unknown as { WebSocket: unknown }).WebSocket = origWebSocket
@@ -535,9 +535,9 @@ describe('WlkServer BUGFIX: proxy-health fallback + probe-error diagnostics', ()
    *   includes last N failures + lastLogs in timeout error (the user saw
    *   "timed out after 180000ms" with Uvicorn logs showing ready but no WS
    *   diagnostic).
-    * - HTTP health fallback: GET http://127.0.0.1:8000/health with 2s timeout
-    *   every iteration -- if health 200, server is ready even when WS handshake
-    *   is blocked by proxy/Chromium interception.
+   * - HTTP health fallback: GET http://127.0.0.1:8000/health with 2s timeout
+   *   every iteration -- if health 200, server is ready even when WS handshake
+   *   is blocked by proxy/Chromium interception.
    * - Spawn logs proxy env once and sets NO_PROXY=127.0.0.1,localhost for child.
    */
   it('resolves via health check even when WebSocket hangs forever', async () => {

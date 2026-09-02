@@ -264,7 +264,7 @@ export class NodeWsTransport implements WsTransport {
   }
 }
 
-export type SttModel = 'tiny' | 'base' | 'small'
+export type SttModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export interface WhisperLiveKitSttAdapterOptions {
   /** Injectable socket seam; defaults to the real NodeWsTransport. */
@@ -298,7 +298,9 @@ export class WhisperLiveKitSttAdapter implements SttAdapter {
       opts.model !== undefined &&
       opts.model !== 'tiny' &&
       opts.model !== 'base' &&
-      opts.model !== 'small'
+      opts.model !== 'small' &&
+      opts.model !== 'medium' &&
+      opts.model !== 'large-v3'
     ) {
       throw new Error(`whisper-livekit: unsupported model "${String(opts.model)}"`)
     }

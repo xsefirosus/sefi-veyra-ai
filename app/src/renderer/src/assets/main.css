@@ -358,6 +358,12 @@ body {
   text-align: center;
 }
 
+.settings-hint {
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--ev-c-text-3);
+}
+
 /*
  * Plan step 18: transcript panel (settings window) + overlay live rendering.
  * Partials render italic/grey (in-flight revision of a segment), finals solid

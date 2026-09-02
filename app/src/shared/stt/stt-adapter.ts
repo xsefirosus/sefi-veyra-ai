@@ -16,7 +16,7 @@
 
 export type SttProvider = 'local-whisperlivekit' | 'cloud-deepgram' | 'cloud-assemblyai'
 
-export type SttModel = 'tiny' | 'base' | 'small'
+export type SttModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export interface SttAdapterOptions {
   /** Capture track tag; defaults to 'mic'. */
@@ -35,7 +35,9 @@ function validateAdapterOptions(opts: SttAdapterOptions): void {
     opts.model !== undefined &&
     opts.model !== 'tiny' &&
     opts.model !== 'base' &&
-    opts.model !== 'small'
+    opts.model !== 'small' &&
+    opts.model !== 'medium' &&
+    opts.model !== 'large-v3'
   ) {
     throw new Error(`stt-adapter: unsupported model "${String(opts.model)}"`)
   }

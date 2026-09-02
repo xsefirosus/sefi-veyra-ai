@@ -172,7 +172,13 @@ export class CaptureSession {
       throw new Error('capture-session: settings.sttModel is required')
     }
     const model = settings.sttModel
-    if (model !== 'tiny' && model !== 'base' && model !== 'small') {
+    if (
+      model !== 'tiny' &&
+      model !== 'base' &&
+      model !== 'small' &&
+      model !== 'medium' &&
+      model !== 'large-v3'
+    ) {
       throw new Error(`capture-session: unsupported sttModel "${String(model)}"`)
     }
 

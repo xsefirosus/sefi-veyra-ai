@@ -9,8 +9,10 @@
  *   --host HOST  "The host address to bind the server to."
  *   --port PORT  "The port number to bind the server to."
  *   --model MODEL_SIZE  "Name size of the Whisper model to use (default: tiny)."
- *   Suggested --model values include tiny, base, small (tiny.en/base.en/small.en
- *   also exist; the settings UI only offers the plain three).
+ *   Suggested --model values include tiny, base, small, medium, large-v3
+ *   (tiny.en/base.en/small.en also exist; the settings UI offers tiny/base/small/
+ *   medium/large-v3, with medium/large-v3 added for better accuracy at the cost
+ *   of 5-15s CPU-only latency; tiny remains the default).
  * The same flags and defaults are in the installed package source
  * (app/.wlk-venv/Lib/site-packages/whisperlivekit/parse_args.py):
  *   --host default="localhost" (parse_args.py:10)
@@ -59,9 +61,9 @@ import { dirname, join, resolve } from 'path'
 /** Injectable spawn seam (audit step 13): structural twin of child_process.spawn. */
 export type SpawnLike = typeof spawn
 
-export type WlkModel = 'tiny' | 'base' | 'small'
+export type WlkModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
-const WLK_MODELS: readonly WlkModel[] = ['tiny', 'base', 'small']
+const WLK_MODELS: readonly WlkModel[] = ['tiny', 'base', 'small', 'medium', 'large-v3']
 
 export const WLK_DEFAULT_HOST = '127.0.0.1'
 // Real shipped default of the installed whisperlivekit 0.2.24 (parse_args.py:14,
@@ -137,7 +139,7 @@ export function wlkBinPath(anchor: string = __dirname): string {
 export function buildWlkCommand(model: WlkModel, wlkBin: string): WlkCommand {
   if (!WLK_MODELS.includes(model)) {
     throw new Error(
-      `wlk-server: unsupported model "${String(model)}" (expected one of: tiny, base, small)`
+      `wlk-server: unsupported model "${String(model)}" (expected one of: tiny, base, small, medium, large-v3)`
     )
   }
   return {
@@ -191,8 +193,8 @@ export interface WlkServerOptions {
 
 /**
  * Lifecycle owner of one wlk server process: start() spawns the venv wlk and
-   * polls its /asr WebSocket until a probe connection is accepted (timeout
-   * default 300s), shutdown() kills the child (the whole process tree on win32 --
+ * polls its /asr WebSocket until a probe connection is accepted (timeout
+ * default 300s), shutdown() kills the child (the whole process tree on win32 --
  * wlk.exe spawns uvicorn as a child, and an orphaned uvicorn keeps the port
  * bound). Idempotent: shutdown() before start() or after an exit is a no-op.
  *
@@ -528,13 +530,19 @@ export class WlkServer {
       const checkHealth = (): Promise<boolean> => {
         if (this.healthCheckOverride) {
           // Still log health override result for diagnostics (spec: health check logs result)
-          return this.healthCheckOverride().then((ok) => {
-            console.log(`[wlk-server] health check ${ok ? '200 OK' : 'not ready'} for http://${this.host}:${this.port}/health`)
-            return ok
-          }).catch(() => {
-            console.log(`[wlk-server] health check not ready for http://${this.host}:${this.port}/health`)
-            return false
-          })
+          return this.healthCheckOverride()
+            .then((ok) => {
+              console.log(
+                `[wlk-server] health check ${ok ? '200 OK' : 'not ready'} for http://${this.host}:${this.port}/health`
+              )
+              return ok
+            })
+            .catch(() => {
+              console.log(
+                `[wlk-server] health check not ready for http://${this.host}:${this.port}/health`
+              )
+              return false
+            })
         }
         return new Promise((resolve) => {
           const url = `http://${this.host}:${this.port}/health`
@@ -542,7 +550,9 @@ export class WlkServer {
           const done = (ok: boolean): void => {
             if (settledHealth) return
             settledHealth = true
-            console.log(`[wlk-server] health check ${ok ? '200 OK' : 'not ready'} for ${url} (status=${ok ? 200 : 'fail'})`)
+            console.log(
+              `[wlk-server] health check ${ok ? '200 OK' : 'not ready'} for ${url} (status=${ok ? 200 : 'fail'})`
+            )
             resolve(ok)
           }
           try {
@@ -664,7 +674,9 @@ export class WlkServer {
         // contains the Uvicorn startup line, resolve immediately without
         // HTTP/WS. Checked every poll before any network.
         if (isLogReady() && !settled) {
-          console.log('[wlk-server] ready via logTail (Uvicorn running / Application startup complete) -> resolve')
+          console.log(
+            '[wlk-server] ready via logTail (Uvicorn running / Application startup complete) -> resolve'
+          )
           settled = true
           cleanup()
           resolveReady()
